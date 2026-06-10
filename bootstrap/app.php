@@ -22,6 +22,8 @@ return Application::configure(basePath: dirname(__DIR__))
         // Alias de middleware
         $middleware->alias([
             'verified' => EnsureEmailIsVerified::class,
+            'workspace.not_locked' => \App\Http\Middleware\EnsureWorkspaceNotLocked::class,
+            'permission' => \App\Http\Middleware\EnsureWorkspacePermission::class,
         ]);
 
         /*

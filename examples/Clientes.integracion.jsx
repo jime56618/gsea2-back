@@ -22,16 +22,8 @@ import {
 } from 'react-icons/fi';
 import './css/Clientes.css';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
-
-function authHeaders() {
-  const token = localStorage.getItem('token');
-  return {
-    'Content-Type': 'application/json',
-    Accept: 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-  };
-}
+import { apiFetch, ApiError } from './utils/apiClient';
+import { persistWorkspaceFromUser } from './utils/workspaceStorage';
 
 function mapContratanteFromApi(row) {
   return {
@@ -61,14 +53,12 @@ export default function Clientes() {
 
   const loadMe = useCallback(async () => {
     try {
-      const res = await fetch(`${API_URL}/user`, { headers: authHeaders() });
-      const json = await res.json();
-      if (!res.ok) return;
+      const json = await apiFetch('/user');
+      persistWorkspaceFromUser(json);
       const name = json.current_workspace?.nombre || json.workspaces?.[0]?.nombre || '';
       setWorkspaceLabel(name);
-      if (json.current_workspace_id) {
-        localStorage.setItem('current_workspace_id', String(json.current_workspace_id));
-      }
+      const wsId = json.user?.current_workspace_id || json.current_workspace?.id;
+      if (wsId) localStorage.setItem('current_workspace_id', String(wsId));
     } catch {
       /* ignore */
     }
@@ -78,13 +68,7 @@ export default function Clientes() {
     setLoading(true);
     setListError('');
     try {
-      const res = await fetch(`${API_URL}/contratantes?per_page=100`, { headers: authHeaders() });
-      const json = await res.json();
-      if (!res.ok) {
-        setListError(json.message || 'No se pudieron cargar los clientes');
-        setClients([]);
-        return;
-      }
+      const json = await apiFetch('/contratantes?per_page=100');
       const rows = json.data || [];
       setClients(rows.map(mapContratanteFromApi));
     } catch (e) {
@@ -331,24 +315,14 @@ function FormularioCliente({ title, onClose, onSaved, initial }) {
       };
 
       const isEdit = Boolean(initial?.id);
-      const url = isEdit ? `${API_URL}/contratantes/${initial.id}` : `${API_URL}/contratantes`;
-      const res = await fetch(url, {
+      const path = isEdit ? `/contratantes/${initial.id}` : '/contratantes';
+      await apiFetch(path, {
         method: isEdit ? 'PUT' : 'POST',
-        headers: authHeaders(),
         body: JSON.stringify(body),
       });
-      const data = await res.json();
-      if (!res.ok) {
-        const msg =
-          data.message ||
-          (data.errors && Object.values(data.errors).flat().join(' ')) ||
-          'Error al guardar';
-        setErr(msg);
-        return;
-      }
       onSaved();
     } catch (ex) {
-      setErr('Error de red');
+      setErr(ex?.message || 'Error de red');
     } finally {
       setSaving(false);
     }

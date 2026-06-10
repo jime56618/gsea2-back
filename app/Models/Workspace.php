@@ -3,6 +3,8 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Workspace extends Model
 {
@@ -20,6 +22,11 @@ class Workspace extends Model
         return $this->belongsTo(Plan::class);
     }
 
+    public function subscription(): HasOne
+    {
+        return $this->hasOne(WorkspaceSubscription::class);
+    }
+
     public function owner()
     {
         return $this->belongsTo(User::class, 'owner_id');
@@ -30,6 +37,11 @@ class Workspace extends Model
         return $this->belongsToMany(User::class, 'workspace_user')
             ->withPivot('role_id')
             ->withTimestamps();
+    }
+
+    public function workspaceUsers(): HasMany
+    {
+        return $this->hasMany(WorkspaceUser::class);
     }
 
     public function contratantes()
@@ -55,5 +67,10 @@ class Workspace extends Model
     public function cobranzaCuotas()
     {
         return $this->hasMany(CobranzaCuota::class);
+    }
+
+    public function customRoles(): HasMany
+    {
+        return $this->hasMany(Role::class);
     }
 }

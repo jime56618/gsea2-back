@@ -35,33 +35,13 @@ import {
   Copy,
 } from 'lucide-react';
 
-import Sidebar from '../components/Sidebar';
-import Navbar from '../components/Navbar';
+import Sidebar from './Sidebar';
+import Navbar from './Navbar';
 import './css/SeguimientoPolizas.css';
 
+import { apiFetch, fetchJson } from './utils/apiClient';
+
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
-
-function authHeaders() {
-  const token = localStorage.getItem('token');
-  return {
-    'Content-Type': 'application/json',
-    Accept: 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-  };
-}
-
-async function fetchJson(url, options = {}) {
-  const res = await fetch(url, { ...options, headers: { ...authHeaders(), ...options.headers } });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    const msg =
-      data.message ||
-      (data.errors && Object.values(data.errors).flat().join(' ')) ||
-      `Error HTTP ${res.status}`;
-    throw new Error(msg);
-  }
-  return data;
-}
 
 /** Vigencia mostrada = fin de vigencia (como tu mock). Estatus derivado de fechas (no hay campo en BD). */
 function mapPolizaFromApi(p) {
@@ -241,15 +221,7 @@ const SeguimientoPolizas = () => {
   const handleDeleteConfirm = async () => {
     if (!selectedPoliza?.id) return;
     try {
-      await fetch(`${API_URL}/polizas/${selectedPoliza.id}`, {
-        method: 'DELETE',
-        headers: authHeaders(),
-      }).then(async (res) => {
-        if (!res.ok) {
-          const d = await res.json().catch(() => ({}));
-          throw new Error(d.message || `Error ${res.status}`);
-        }
-      });
+      await apiFetch(`/polizas/${selectedPoliza.id}`, { method: 'DELETE' });
       setModalType(null);
       setSelectedPoliza(null);
       setActiveMenuId(null);

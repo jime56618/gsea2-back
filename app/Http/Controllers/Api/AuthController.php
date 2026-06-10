@@ -2,11 +2,10 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Actions\RegisterWorkspaceForOwner;
 use App\Http\Controllers\Controller;
-use App\Models\Role;
+use App\Http\Support\AuthWorkspacePayload;
 use App\Models\User;
-use App\Models\Workspace;
-use App\Models\WorkspaceUser;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -19,8 +18,13 @@ use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
 {
+    public function __construct(
+        private AuthWorkspacePayload $authPayload,
+        private RegisterWorkspaceForOwner $registerWorkspace,
+    ) {}
+
     /**
-     * Inicio de sesión solo API: devuelve token Sanctum (sin sesión ni CSRF).
+     * Inicio de sesión API: token Sanctum + contexto de promotoría activa.
      */
     public function login(Request $request): JsonResponse
     {
@@ -37,8 +41,6 @@ class AuthController extends Controller
         if (! $user || ! Hash::check($credentials['password'], $user->password)) {
             RateLimiter::hit($this->loginThrottleKey($request));
 
-             $device = $request->input('device_name', 'web');
-
             throw ValidationException::withMessages([
                 'email' => [__('auth.failed')],
             ]);
@@ -52,15 +54,14 @@ class AuthController extends Controller
         $this->ensureCurrentWorkspace($user);
         $user->refresh();
 
-        return response()->json([
-            'user' => $user->load(['workspaces', 'currentWorkspace']),
-            'token' => $token,
-            'token_type' => 'Bearer',
-        ]);
+        return response()->json(array_merge(
+            $this->authPayload->forUser($user),
+            ['token' => $token, 'token_type' => 'Bearer']
+        ));
     }
 
     /**
-     * Registro igual que el flujo web (workspace + rol admin), pero respuesta API con token.
+     * Registro: usuario + promotoría nueva con trial y rol administrador.
      */
     public function register(Request $request): JsonResponse
     {
@@ -81,22 +82,7 @@ class AuthController extends Controller
                 'password' => Hash::make($data['password']),
             ]);
 
-            $workspace = Workspace::create([
-                'nombre' => $data['workspace'],
-                'slug' => Str::slug($data['workspace']).'-'.Str::random(6),
-                'owner_id' => $user->id,
-            ]);
-
-            $adminRole = Role::firstOrCreate(['nombre' => 'admin']);
-
-            WorkspaceUser::create([
-                'workspace_id' => $workspace->id,
-                'user_id' => $user->id,
-                'role_id' => $adminRole->id,
-            ]);
-
-            $user->current_workspace_id = $workspace->id;
-            $user->save();
+            $this->registerWorkspace->execute($user, $data['workspace']);
         });
 
         event(new Registered($user));
@@ -104,11 +90,10 @@ class AuthController extends Controller
         $device = $data['device_name'] ?? 'api';
         $token = $user->createToken($device)->plainTextToken;
 
-        return response()->json([
-            'user' => $user->load(['workspaces', 'currentWorkspace']),
-            'token' => $token,
-            'token_type' => 'Bearer',
-        ], 201);
+        return response()->json(array_merge(
+            $this->authPayload->forUser($user->fresh()),
+            ['token' => $token, 'token_type' => 'Bearer']
+        ), 201);
     }
 
     public function me(Request $request): JsonResponse
@@ -117,7 +102,7 @@ class AuthController extends Controller
         $this->ensureCurrentWorkspace($user);
         $user->refresh();
 
-        return response()->json($user->load(['workspaces', 'currentWorkspace']));
+        return response()->json($this->authPayload->forUser($user));
     }
 
     public function setCurrentWorkspace(Request $request): JsonResponse
@@ -140,10 +125,10 @@ class AuthController extends Controller
         $user->current_workspace_id = $data['workspace_id'];
         $user->save();
 
-        return response()->json([
-            'message' => 'Workspace activo actualizado.',
-            'user' => $user->fresh()->load(['workspaces', 'currentWorkspace']),
-        ]);
+        return response()->json(array_merge(
+            ['message' => 'Workspace activo actualizado.'],
+            $this->authPayload->forUser($user->fresh())
+        ));
     }
 
     public function logout(Request $request): JsonResponse

@@ -2,18 +2,18 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Http\Controllers\Controller;
 use App\Models\Agente;
 use App\Models\AgenteWorkspace;
-use App\Models\User;
+use App\Support\WorkspacePermissions;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
-class AgentePromotoriaController extends Controller
+class AgentePromotoriaController extends BaseApiController
 {
     public function index(Request $request)
     {
+        $this->requirePermission($request, WorkspacePermissions::AGENTES_VIEW);
         $workspaceId = $this->resolveWorkspaceId($request);
 
         $query = AgenteWorkspace::query()
@@ -26,6 +26,7 @@ class AgentePromotoriaController extends Controller
 
     public function store(Request $request)
     {
+        $this->requirePermission($request, WorkspacePermissions::AGENTES_MANAGE);
         $data = $request->validate([
             'workspace_id' => 'sometimes|exists:workspaces,id',
             'status' => 'nullable|string|max:50',
@@ -95,6 +96,7 @@ class AgentePromotoriaController extends Controller
 
     public function show(AgenteWorkspace $agentePromotoria)
     {
+        $this->requirePermission(request(), WorkspacePermissions::AGENTES_VIEW);
         $this->abortIfOutOfWorkspace(request(), $agentePromotoria->workspace_id);
 
         return $agentePromotoria->load(['agente', 'workspace', 'clavesAseguradora.aseguradora']);
@@ -102,6 +104,7 @@ class AgentePromotoriaController extends Controller
 
     public function update(Request $request, AgenteWorkspace $agentePromotoria)
     {
+        $this->requirePermission($request, WorkspacePermissions::AGENTES_MANAGE);
         $workspaceId = $this->resolveWorkspaceId($request);
         $this->abortIfOutOfWorkspace($request, $agentePromotoria->workspace_id);
 
@@ -171,55 +174,10 @@ class AgentePromotoriaController extends Controller
 
     public function destroy(AgenteWorkspace $agentePromotoria)
     {
+        $this->requirePermission(request(), WorkspacePermissions::AGENTES_MANAGE);
         $this->abortIfOutOfWorkspace(request(), $agentePromotoria->workspace_id);
         $agentePromotoria->delete();
 
         return response()->noContent();
-    }
-
-    private function resolveWorkspaceId(Request $request, ?int $requestedWorkspaceId = null): int
-    {
-        /** @var User $user */
-        $user = $request->user();
-        $activeWorkspaceId = $user->current_workspace_id;
-
-        if (empty($activeWorkspaceId)) {
-            abort(response()->json([
-                'message' => 'No hay workspace activo para el usuario.',
-            ], 422));
-        }
-
-        $hasAccess = $user->workspaces()
-            ->where('workspaces.id', $activeWorkspaceId)
-            ->exists();
-
-        if (! $hasAccess) {
-            abort(response()->json([
-                'message' => 'El workspace activo no pertenece al usuario.',
-            ], 403));
-        }
-
-        if ($requestedWorkspaceId === null || (int) $requestedWorkspaceId === 0) {
-            $requestedWorkspaceId = null;
-        }
-
-        if ($requestedWorkspaceId !== null && (int) $requestedWorkspaceId !== (int) $activeWorkspaceId) {
-            abort(response()->json([
-                'message' => 'El workspace enviado no coincide con el workspace activo.',
-            ], 422));
-        }
-
-        return (int) $activeWorkspaceId;
-    }
-
-    private function abortIfOutOfWorkspace(Request $request, int $resourceWorkspaceId): void
-    {
-        $workspaceId = $this->resolveWorkspaceId($request);
-
-        if ((int) $workspaceId !== (int) $resourceWorkspaceId) {
-            abort(response()->json([
-                'message' => 'No tienes acceso a recursos de otro workspace.',
-            ], 403));
-        }
     }
 }

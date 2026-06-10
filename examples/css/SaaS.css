@@ -1,0 +1,204 @@
+/* --- Trial banner --- */
+.gsea-trial-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.65rem 1.25rem;
+  background: linear-gradient(90deg, #1e488f 0%, #1b6f81 100%);
+  color: #fff;
+  font-size: 0.875rem;
+  flex-wrap: wrap;
+}
+
+.gsea-trial-banner--urgent {
+  background: linear-gradient(90deg, #b45309 0%, #dc2626 100%);
+}
+
+.gsea-trial-banner__date {
+  opacity: 0.85;
+  font-size: 0.8rem;
+}
+
+.gsea-trial-banner__cta {
+  background: #dbe64c;
+  color: #09324a;
+  padding: 0.35rem 1rem;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 0.8rem;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.gsea-trial-banner__cta:hover {
+  filter: brightness(1.05);
+}
+
+/* --- App shell margins (alineado con sidebar 280/88) --- */
+.gsea-app-shell {
+  min-height: 100vh;
+  background: #f1f5f9;
+}
+
+.gsea-app-main {
+  transition: margin-left 0.3s ease;
+  min-height: 100vh;
+}
+
+.gsea-app-main--expanded {
+  margin-left: 280px;
+}
+
+.gsea-app-main--collapsed {
+  margin-left: 88px;
+}
+
+/* --- Billing locked page --- */
+.gsea-billing-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  background: linear-gradient(135deg, #001e42 0%, #1e488f 50%, #09324a 100%);
+}
+
+.gsea-billing-card {
+  max-width: 480px;
+  width: 100%;
+  background: #fff;
+  border-radius: 1.25rem;
+  padding: 2.5rem;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.35);
+  text-align: center;
+}
+
+.gsea-billing-card h1 {
+  font-size: 1.5rem;
+  color: #09324a;
+  margin-bottom: 0.75rem;
+}
+
+.gsea-billing-card p {
+  color: #64748b;
+  margin-bottom: 1.5rem;
+  line-height: 1.5;
+}
+
+.gsea-billing-btn {
+  width: 100%;
+  padding: 0.85rem;
+  border: none;
+  border-radius: 0.75rem;
+  background: #1e488f;
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.gsea-billing-btn:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.gsea-billing-btn--secondary {
+  background: transparent;
+  color: #1e488f;
+  border: 2px solid #1e488f;
+  margin-top: 0.75rem;
+}
+
+/* --- Config pages --- */
+.gsea-config-page {
+  padding: 1.5rem 2rem 3rem;
+  max-width: 960px;
+}
+
+.gsea-config-page h1 {
+  font-size: 1.75rem;
+  color: #09324a;
+  margin-bottom: 0.25rem;
+}
+
+.gsea-config-page .gsea-config-sub {
+  color: #64748b;
+  margin-bottom: 1.5rem;
+}
+
+.gsea-card {
+  background: #fff;
+  border-radius: 1rem;
+  padding: 1.25rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  margin-bottom: 1rem;
+}
+
+.gsea-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.gsea-table th,
+.gsea-table td {
+  text-align: left;
+  padding: 0.65rem 0.5rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.gsea-input,
+.gsea-select {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.gsea-btn-primary {
+  background: #1e488f;
+  color: #fff;
+  border: none;
+  padding: 0.5rem 1.25rem;
+  border-radius: 0.5rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.gsea-btn-primary:disabled {
+  opacity: 0.6;
+}
+
+.gsea-error {
+  color: #dc2626;
+  font-size: 0.875rem;
+  margin-bottom: 0.75rem;
+}
+
+.gsea-perm-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 0.5rem;
+}
+
+.gsea-perm-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  padding: 0.35rem;
+  border-radius: 0.35rem;
+}
+
+.gsea-perm-item:hover {
+  background: #f8fafc;
+}
+
+.gsea-workspace-switcher select {
+  padding: 0.35rem 0.75rem;
+  border-radius: 0.5rem;
+  border: 1px solid #cbd5e1;
+  font-size: 0.8rem;
+  max-width: 200px;
+}

@@ -19,7 +19,13 @@ class PlanController extends Controller
     {
         $data = $request->validate([
             'nombre' => 'required|string|max:255',
+            'slug' => 'nullable|string|max:64|unique:planes,slug',
             'precio_mensual' => 'nullable|numeric|min:0',
+            'trial_days' => 'nullable|integer|min:0',
+            'limits' => 'nullable|array',
+            'features' => 'nullable|array',
+            'is_public' => 'boolean',
+            'description' => 'nullable|string',
         ]);
 
         $plan = Plan::create($data);
@@ -36,7 +42,13 @@ class PlanController extends Controller
     {
         $data = $request->validate([
             'nombre' => 'sometimes|required|string|max:255',
+            'slug' => 'sometimes|string|max:64|unique:planes,slug,'.$plan->id,
             'precio_mensual' => 'nullable|numeric|min:0',
+            'trial_days' => 'nullable|integer|min:0',
+            'limits' => 'nullable|array',
+            'features' => 'nullable|array',
+            'is_public' => 'boolean',
+            'description' => 'nullable|string',
         ]);
 
         $plan->update($data);

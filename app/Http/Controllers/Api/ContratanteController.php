@@ -2,18 +2,15 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Http\Controllers\Controller;
 use App\Models\Contratante;
-use App\Models\User;
+use App\Support\WorkspacePermissions;
 use Illuminate\Http\Request;
 
-class ContratanteController extends Controller
+class ContratanteController extends BaseApiController
 {
-    /**
-     * Listado del workspace activo del usuario (no confiar en workspace_id del cliente).
-     */
     public function index(Request $request)
     {
+        $this->requirePermission($request, WorkspacePermissions::CONTRATANTES_VIEW);
         $requestedWs = $request->filled('workspace_id') ? $request->integer('workspace_id') : null;
         $workspaceId = $this->resolveWorkspaceId($request, $requestedWs);
 
@@ -26,6 +23,7 @@ class ContratanteController extends Controller
 
     public function store(Request $request)
     {
+        $this->requirePermission($request, WorkspacePermissions::CONTRATANTES_MANAGE);
         $data = $request->validate([
             'workspace_id' => 'sometimes|exists:workspaces,id',
             'nombre' => 'required|string|max:255',
@@ -51,6 +49,7 @@ class ContratanteController extends Controller
 
     public function show(Request $request, Contratante $contratante)
     {
+        $this->requirePermission($request, WorkspacePermissions::CONTRATANTES_VIEW);
         $this->abortIfOutOfWorkspace($request, $contratante->workspace_id);
 
         return $contratante->load(['workspace', 'polizas']);
@@ -58,15 +57,12 @@ class ContratanteController extends Controller
 
     public function update(Request $request, Contratante $contratante)
     {
+        $this->requirePermission($request, WorkspacePermissions::CONTRATANTES_MANAGE);
         $activeWorkspaceId = $this->resolveWorkspaceId($request);
         $this->abortIfOutOfWorkspace($request, $contratante->workspace_id);
 
         $data = $request->validate([
-            'workspace_id' => [
-                'sometimes',
-                'required',
-                'exists:workspaces,id',
-            ],
+            'workspace_id' => ['sometimes', 'required', 'exists:workspaces,id'],
             'nombre' => 'sometimes|required|string|max:255',
             'rfc' => 'nullable|string|max:20',
             'telefono' => 'nullable|string|max:50',
@@ -87,55 +83,10 @@ class ContratanteController extends Controller
 
     public function destroy(Request $request, Contratante $contratante)
     {
+        $this->requirePermission($request, WorkspacePermissions::CONTRATANTES_MANAGE);
         $this->abortIfOutOfWorkspace($request, $contratante->workspace_id);
         $contratante->delete();
 
         return response()->noContent();
-    }
-
-    private function resolveWorkspaceId(Request $request, ?int $requestedWorkspaceId = null): int
-    {
-        /** @var User $user */
-        $user = $request->user();
-        $activeWorkspaceId = $user->current_workspace_id;
-
-        if (empty($activeWorkspaceId)) {
-            abort(response()->json([
-                'message' => 'No hay workspace activo para el usuario.',
-            ], 422));
-        }
-
-        $hasAccess = $user->workspaces()
-            ->where('workspaces.id', $activeWorkspaceId)
-            ->exists();
-
-        if (! $hasAccess) {
-            abort(response()->json([
-                'message' => 'El workspace activo no pertenece al usuario.',
-            ], 403));
-        }
-
-        if ($requestedWorkspaceId === null || (int) $requestedWorkspaceId === 0) {
-            $requestedWorkspaceId = null;
-        }
-
-        if ($requestedWorkspaceId !== null && (int) $requestedWorkspaceId !== (int) $activeWorkspaceId) {
-            abort(response()->json([
-                'message' => 'El workspace enviado no coincide con el workspace activo.',
-            ], 422));
-        }
-
-        return (int) $activeWorkspaceId;
-    }
-
-    private function abortIfOutOfWorkspace(Request $request, int $resourceWorkspaceId): void
-    {
-        $workspaceId = $this->resolveWorkspaceId($request);
-
-        if ((int) $workspaceId !== (int) $resourceWorkspaceId) {
-            abort(response()->json([
-                'message' => 'No tienes acceso a recursos de otro workspace.',
-            ], 403));
-        }
     }
 }

@@ -2,20 +2,20 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Http\Controllers\Controller;
 use App\Models\CobranzaCuota;
 use App\Models\Contratante;
 use App\Models\Poliza;
 use App\Models\Tramite;
-use App\Models\User;
+use App\Support\WorkspacePermissions;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
-class DashboardController extends Controller
+class DashboardController extends BaseApiController
 {
     public function summary(Request $request)
     {
+        $this->requirePermission($request, WorkspacePermissions::DASHBOARD_VIEW);
         $workspaceId = $this->resolveWorkspaceId($request);
         $today = now()->startOfDay();
 
@@ -184,40 +184,5 @@ class DashboardController extends Controller
             'objetivo' => $metaObjetivo,
             'workspace_id' => $workspaceId,
         ]);
-    }
-
-    private function resolveWorkspaceId(Request $request, ?int $requestedWorkspaceId = null): int
-    {
-        /** @var User $user */
-        $user = $request->user();
-        $activeWorkspaceId = $user->current_workspace_id;
-
-        if (empty($activeWorkspaceId)) {
-            abort(response()->json([
-                'message' => 'No hay workspace activo para el usuario.',
-            ], 422));
-        }
-
-        $hasAccess = $user->workspaces()
-            ->where('workspaces.id', $activeWorkspaceId)
-            ->exists();
-
-        if (! $hasAccess) {
-            abort(response()->json([
-                'message' => 'El workspace activo no pertenece al usuario.',
-            ], 403));
-        }
-
-        if ($requestedWorkspaceId === null || (int) $requestedWorkspaceId === 0) {
-            $requestedWorkspaceId = null;
-        }
-
-        if ($requestedWorkspaceId !== null && (int) $requestedWorkspaceId !== (int) $activeWorkspaceId) {
-            abort(response()->json([
-                'message' => 'El workspace enviado no coincide con el workspace activo.',
-            ], 422));
-        }
-
-        return (int) $activeWorkspaceId;
     }
 }

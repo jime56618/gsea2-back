@@ -2,15 +2,15 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Http\Controllers\Controller;
 use App\Models\Tramite;
-use App\Models\User;
+use App\Support\WorkspacePermissions;
 use Illuminate\Http\Request;
 
-class TramiteController extends Controller
+class TramiteController extends BaseApiController
 {
     public function index(Request $request)
     {
+        $this->requirePermission($request, WorkspacePermissions::TRAMITES_VIEW);
         $requestedWs = $request->filled('workspace_id') ? $request->integer('workspace_id') : null;
         $workspaceId = $this->resolveWorkspaceId($request, $requestedWs);
 
@@ -23,6 +23,7 @@ class TramiteController extends Controller
 
     public function store(Request $request)
     {
+        $this->requirePermission($request, WorkspacePermissions::TRAMITES_MANAGE);
         $data = $request->validate([
             'workspace_id' => 'sometimes|exists:workspaces,id',
             'folio' => 'nullable|string|max:100',
@@ -57,6 +58,7 @@ class TramiteController extends Controller
 
     public function show(Request $request, Tramite $tramite)
     {
+        $this->requirePermission($request, WorkspacePermissions::TRAMITES_VIEW);
         $this->abortIfOutOfWorkspace($request, $tramite->workspace_id);
 
         return $tramite->load('workspace');
@@ -64,6 +66,7 @@ class TramiteController extends Controller
 
     public function update(Request $request, Tramite $tramite)
     {
+        $this->requirePermission($request, WorkspacePermissions::TRAMITES_MANAGE);
         $activeWorkspaceId = $this->resolveWorkspaceId($request);
         $this->abortIfOutOfWorkspace($request, $tramite->workspace_id);
 
@@ -102,55 +105,10 @@ class TramiteController extends Controller
 
     public function destroy(Request $request, Tramite $tramite)
     {
+        $this->requirePermission($request, WorkspacePermissions::TRAMITES_MANAGE);
         $this->abortIfOutOfWorkspace($request, $tramite->workspace_id);
         $tramite->delete();
 
         return response()->noContent();
-    }
-
-    private function resolveWorkspaceId(Request $request, ?int $requestedWorkspaceId = null): int
-    {
-        /** @var User $user */
-        $user = $request->user();
-        $activeWorkspaceId = $user->current_workspace_id;
-
-        if (empty($activeWorkspaceId)) {
-            abort(response()->json([
-                'message' => 'No hay workspace activo para el usuario.',
-            ], 422));
-        }
-
-        $hasAccess = $user->workspaces()
-            ->where('workspaces.id', $activeWorkspaceId)
-            ->exists();
-
-        if (! $hasAccess) {
-            abort(response()->json([
-                'message' => 'El workspace activo no pertenece al usuario.',
-            ], 403));
-        }
-
-        if ($requestedWorkspaceId === null || (int) $requestedWorkspaceId === 0) {
-            $requestedWorkspaceId = null;
-        }
-
-        if ($requestedWorkspaceId !== null && (int) $requestedWorkspaceId !== (int) $activeWorkspaceId) {
-            abort(response()->json([
-                'message' => 'El workspace enviado no coincide con el workspace activo.',
-            ], 422));
-        }
-
-        return (int) $activeWorkspaceId;
-    }
-
-    private function abortIfOutOfWorkspace(Request $request, int $resourceWorkspaceId): void
-    {
-        $workspaceId = $this->resolveWorkspaceId($request);
-
-        if ((int) $workspaceId !== (int) $resourceWorkspaceId) {
-            abort(response()->json([
-                'message' => 'No tienes acceso a recursos de otro workspace.',
-            ], 403));
-        }
     }
 }

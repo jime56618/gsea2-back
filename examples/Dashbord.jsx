@@ -2,7 +2,9 @@ import React, { useState, useEffect } from 'react';
 import './css/Dashboard.css';
 import Sidebar from './Sidebar';
 import Navbar from './Navbar';
-import { persistWorkspaceFromUser } from '../utils/workspaceStorage'; 
+import { apiFetch } from './utils/apiClient';
+import { persistWorkspaceFromUser } from './utils/workspaceStorage';
+import './css/SaaS.css';
 import { motion, animate } from 'framer-motion'; 
 import { 
   Users, ShieldCheck, BadgeDollarSign, TrendingUp, 
@@ -42,14 +44,6 @@ const EMPTY_DASHBOARD = {
     progress_pct: 0,
   },
 };
-
-function authHeaders() {
-  const token = localStorage.getItem('token');
-  return {
-    Accept: 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-  };
-}
 
 function formatTodayLabel() {
   const now = new Date();
@@ -95,20 +89,17 @@ export default function Dashboard() {
   useEffect(() => {
     const fetchUserAndDashboard = async () => {
       try {
-        const [userRes, dashboardRes] = await Promise.all([
-          fetch(`${API_URL}/user`, { headers: authHeaders() }),
-          fetch(`${API_URL}/dashboard/summary`, { headers: authHeaders() }),
+        const [userData, dashboardData] = await Promise.all([
+          apiFetch('/user').catch(() => null),
+          apiFetch('/dashboard/summary').catch(() => null),
         ]);
 
-        const userData = await userRes.json().catch(() => null);
-        if (userRes.ok && userData) {
-          setUser(userData);
-          localStorage.setItem('user', JSON.stringify(userData));
-          persistWorkspaceFromUser(userData);
+        if (userData) {
+          const session = persistWorkspaceFromUser(userData);
+          setUser(session?.user || userData.user);
         }
 
-        const dashboardData = await dashboardRes.json().catch(() => null);
-        if (dashboardRes.ok && dashboardData) {
+        if (dashboardData) {
           setDashboard(dashboardData);
         } else {
           setDashboard(EMPTY_DASHBOARD);

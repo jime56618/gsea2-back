@@ -2,16 +2,16 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Http\Controllers\Controller;
 use App\Models\CobranzaCuota;
 use App\Models\Poliza;
-use App\Models\User;
+use App\Support\WorkspacePermissions;
 use Illuminate\Http\Request;
 
-class CobranzaCuotaController extends Controller
+class CobranzaCuotaController extends BaseApiController
 {
     public function index(Request $request)
     {
+        $this->requirePermission($request, WorkspacePermissions::COBRANZA_VIEW);
         $requestedWs = $request->filled('workspace_id') ? $request->integer('workspace_id') : null;
         $workspaceId = $this->resolveWorkspaceId($request, $requestedWs);
 
@@ -42,6 +42,7 @@ class CobranzaCuotaController extends Controller
 
     public function store(Request $request)
     {
+        $this->requirePermission($request, WorkspacePermissions::COBRANZA_MANAGE);
         $data = $request->validate([
             'workspace_id' => 'sometimes|exists:workspaces,id',
             'poliza_id' => 'required|exists:polizas,id',
@@ -83,6 +84,7 @@ class CobranzaCuotaController extends Controller
 
     public function show(Request $request, CobranzaCuota $cobranzaCuota)
     {
+        $this->requirePermission($request, WorkspacePermissions::COBRANZA_VIEW);
         $this->abortIfOutOfWorkspace($request, $cobranzaCuota->workspace_id);
 
         return $cobranzaCuota->load(['poliza.contratante', 'poliza.aseguradora']);
@@ -90,6 +92,7 @@ class CobranzaCuotaController extends Controller
 
     public function update(Request $request, CobranzaCuota $cobranzaCuota)
     {
+        $this->requirePermission($request, WorkspacePermissions::COBRANZA_MANAGE);
         $this->abortIfOutOfWorkspace($request, $cobranzaCuota->workspace_id);
 
         $data = $request->validate([
@@ -106,55 +109,10 @@ class CobranzaCuotaController extends Controller
 
     public function destroy(Request $request, CobranzaCuota $cobranzaCuota)
     {
+        $this->requirePermission($request, WorkspacePermissions::COBRANZA_MANAGE);
         $this->abortIfOutOfWorkspace($request, $cobranzaCuota->workspace_id);
         $cobranzaCuota->delete();
 
         return response()->noContent();
-    }
-
-    private function resolveWorkspaceId(Request $request, ?int $requestedWorkspaceId = null): int
-    {
-        /** @var User $user */
-        $user = $request->user();
-        $activeWorkspaceId = $user->current_workspace_id;
-
-        if (empty($activeWorkspaceId)) {
-            abort(response()->json([
-                'message' => 'No hay workspace activo para el usuario.',
-            ], 422));
-        }
-
-        $hasAccess = $user->workspaces()
-            ->where('workspaces.id', $activeWorkspaceId)
-            ->exists();
-
-        if (! $hasAccess) {
-            abort(response()->json([
-                'message' => 'El workspace activo no pertenece al usuario.',
-            ], 403));
-        }
-
-        if ($requestedWorkspaceId === null || (int) $requestedWorkspaceId === 0) {
-            $requestedWorkspaceId = null;
-        }
-
-        if ($requestedWorkspaceId !== null && (int) $requestedWorkspaceId !== (int) $activeWorkspaceId) {
-            abort(response()->json([
-                'message' => 'El workspace enviado no coincide con el workspace activo.',
-            ], 422));
-        }
-
-        return (int) $activeWorkspaceId;
-    }
-
-    private function abortIfOutOfWorkspace(Request $request, int $resourceWorkspaceId): void
-    {
-        $workspaceId = $this->resolveWorkspaceId($request);
-
-        if ((int) $workspaceId !== (int) $resourceWorkspaceId) {
-            abort(response()->json([
-                'message' => 'No tienes acceso a recursos de otro workspace.',
-            ], 403));
-        }
     }
 }

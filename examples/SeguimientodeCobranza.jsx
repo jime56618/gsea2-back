@@ -11,29 +11,9 @@ import { Menu, Transition } from '@headlessui/react';
 import { motion, AnimatePresence } from 'framer-motion';
 import './css/SeguimientoCobranza.css';
 
+import { fetchJson } from './utils/apiClient';
+
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
-
-function authHeaders() {
-  const token = localStorage.getItem('token');
-  return {
-    'Content-Type': 'application/json',
-    Accept: 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-  };
-}
-
-async function fetchJson(url, options = {}) {
-  const res = await fetch(url, { ...options, headers: { ...authHeaders(), ...options.headers } });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    const msg =
-      data.message ||
-      (data.errors && Object.values(data.errors).flat().join(' ')) ||
-      `Error HTTP ${res.status}`;
-    throw new Error(msg);
-  }
-  return data;
-}
 
 function nombreAgenteDesdePoliza(poliza) {
   const ag = poliza?.agente_workspace?.agente || poliza?.agenteWorkspace?.agente;

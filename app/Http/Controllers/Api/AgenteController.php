@@ -2,14 +2,16 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Http\Controllers\Controller;
 use App\Models\Agente;
+use App\Support\WorkspacePermissions;
 use Illuminate\Http\Request;
 
-class AgenteController extends Controller
+class AgenteController extends BaseApiController
 {
     public function index(Request $request)
     {
+        $this->requirePermission($request, WorkspacePermissions::AGENTES_VIEW);
+
         return Agente::query()
             ->orderBy('nombre')
             ->paginate($request->integer('per_page', 15));
@@ -17,6 +19,7 @@ class AgenteController extends Controller
 
     public function store(Request $request)
     {
+        $this->requirePermission($request, WorkspacePermissions::AGENTES_MANAGE);
         $data = $request->validate([
             'cedula' => 'required|string|max:255|unique:agentes,cedula',
             'nombre' => 'required|string|max:255',
@@ -41,11 +44,14 @@ class AgenteController extends Controller
 
     public function show(Agente $agente)
     {
+        $this->requirePermission(request(), WorkspacePermissions::AGENTES_VIEW);
+
         return $agente;
     }
 
     public function update(Request $request, Agente $agente)
     {
+        $this->requirePermission($request, WorkspacePermissions::AGENTES_MANAGE);
         $data = $request->validate([
             'cedula' => 'sometimes|required|string|max:255|unique:agentes,cedula,'.$agente->id,
             'nombre' => 'sometimes|required|string|max:255',
@@ -70,6 +76,7 @@ class AgenteController extends Controller
 
     public function destroy(Agente $agente)
     {
+        $this->requirePermission(request(), WorkspacePermissions::AGENTES_MANAGE);
         $agente->delete();
 
         return response()->noContent();

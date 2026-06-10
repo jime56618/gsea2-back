@@ -2,18 +2,17 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Http\Controllers\Controller;
 use App\Models\AgenteWorkspace;
 use App\Models\Contratante;
 use App\Models\Poliza;
 use App\Models\PolizaVehiculo;
 use App\Models\Subramo;
-use App\Models\User;
 use App\Services\CobranzaCuotasGenerator;
+use App\Support\WorkspacePermissions;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
-class PolizaController extends Controller
+class PolizaController extends BaseApiController
 {
     public function __construct(
         private CobranzaCuotasGenerator $cobranzaCuotasGenerator
@@ -21,6 +20,7 @@ class PolizaController extends Controller
 
     public function index(Request $request)
     {
+        $this->requirePermission($request, WorkspacePermissions::POLIZAS_VIEW);
         $requestedWs = $request->filled('workspace_id') ? $request->integer('workspace_id') : null;
         $workspaceId = $this->resolveWorkspaceId($request, $requestedWs);
 
@@ -46,6 +46,7 @@ class PolizaController extends Controller
 
     public function store(Request $request)
     {
+        $this->requirePermission($request, WorkspacePermissions::POLIZAS_MANAGE);
         $data = $request->validate([
             'workspace_id' => 'sometimes|exists:workspaces,id',
             'contratante_id' => 'required|exists:contratantes,id',
@@ -164,6 +165,7 @@ class PolizaController extends Controller
 
     public function show(Poliza $poliza)
     {
+        $this->requirePermission(request(), WorkspacePermissions::POLIZAS_VIEW);
         $this->abortIfOutOfWorkspace(request(), $poliza->workspace_id);
 
         return $poliza->load([
@@ -181,6 +183,7 @@ class PolizaController extends Controller
 
     public function update(Request $request, Poliza $poliza)
     {
+        $this->requirePermission($request, WorkspacePermissions::POLIZAS_MANAGE);
         $activeWorkspaceId = $this->resolveWorkspaceId($request);
         $this->abortIfOutOfWorkspace($request, $poliza->workspace_id);
 
@@ -328,55 +331,10 @@ class PolizaController extends Controller
 
     public function destroy(Poliza $poliza)
     {
+        $this->requirePermission(request(), WorkspacePermissions::POLIZAS_MANAGE);
         $this->abortIfOutOfWorkspace(request(), $poliza->workspace_id);
         $poliza->delete();
 
         return response()->noContent();
-    }
-
-    private function resolveWorkspaceId(Request $request, ?int $requestedWorkspaceId = null): int
-    {
-        /** @var User $user */
-        $user = $request->user();
-        $activeWorkspaceId = $user->current_workspace_id;
-
-        if (empty($activeWorkspaceId)) {
-            abort(response()->json([
-                'message' => 'No hay workspace activo para el usuario.',
-            ], 422));
-        }
-
-        $hasAccess = $user->workspaces()
-            ->where('workspaces.id', $activeWorkspaceId)
-            ->exists();
-
-        if (! $hasAccess) {
-            abort(response()->json([
-                'message' => 'El workspace activo no pertenece al usuario.',
-            ], 403));
-        }
-
-        if ($requestedWorkspaceId === null || (int) $requestedWorkspaceId === 0) {
-            $requestedWorkspaceId = null;
-        }
-
-        if ($requestedWorkspaceId !== null && (int) $requestedWorkspaceId !== (int) $activeWorkspaceId) {
-            abort(response()->json([
-                'message' => 'El workspace enviado no coincide con el workspace activo.',
-            ], 422));
-        }
-
-        return (int) $activeWorkspaceId;
-    }
-
-    private function abortIfOutOfWorkspace(Request $request, int $resourceWorkspaceId): void
-    {
-        $workspaceId = $this->resolveWorkspaceId($request);
-
-        if ((int) $workspaceId !== (int) $resourceWorkspaceId) {
-            abort(response()->json([
-                'message' => 'No tienes acceso a recursos de otro workspace.',
-            ], 403));
-        }
     }
 }
