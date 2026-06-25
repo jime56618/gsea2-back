@@ -10,3 +10,5 @@ Artisan::command('inspire', function () {
 
 // Bloqueo automático de promotorías con trial vencido (sin pago).
 Schedule::command('subscriptions:expire-trials')->daily();
+
+Schedule::command('google-calendar:sync')->everyMinute();

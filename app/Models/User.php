@@ -48,4 +48,9 @@ class User extends Authenticatable
     {
         return $this->belongsToMany(Role::class, 'workspace_user');
     }
+
+    public function googleIntegration()
+   {
+    return $this->hasOne(GoogleIntegration::class);
+    }
 }

@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Api;
 
 use App\Models\Invitation;
+use App\Mail\InvitationMail;
+use Illuminate\Support\Facades\Mail;
 use App\Services\Authorization\WorkspaceAuthorizationService;
 use App\Services\Subscription\SubscriptionService;
 use App\Support\WorkspacePermissions;
@@ -60,7 +62,17 @@ class InvitationController extends BaseApiController
 
         $invitation = Invitation::create($data);
 
-        return response()->json($invitation->load(['workspace', 'role']), 201);
+        $frontendUrl = env('FRONTEND_URL', 'http://localhost:5173'); 
+
+        $inviteUrl = rtrim($frontendUrl, '/') . '/invitacion/' . $invitation->token;
+        
+        Mail::to($invitation->email)
+            ->send(new InvitationMail($invitation, $inviteUrl));
+        
+        return response()->json(
+            $invitation->load(['workspace', 'role']),
+            201
+        );
     }
 
     public function show(Request $request, Invitation $invitation)

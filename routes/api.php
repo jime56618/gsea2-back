@@ -24,6 +24,7 @@ use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\WorkspaceController;
 use App\Http\Controllers\Api\WorkspaceRoleController;
 use App\Http\Controllers\Api\WorkspaceUserController;
+use App\Http\Controllers\Api\GoogleCalendarIntegrationController;
 use Illuminate\Support\Facades\Route;
 
 Route::post('/login', [AuthController::class, 'login']);
@@ -35,12 +36,17 @@ Route::get('/invitations/token/{token}', [InvitationAcceptController::class, 'sh
 Route::post('/invitations/accept', [InvitationAcceptController::class, 'accept'])
     ->name('invitations.accept');
 
+Route::get('/integrations/google-calendar/callback', [GoogleCalendarIntegrationController::class, 'callback']);    
+
 Route::middleware(['auth:sanctum'])->group(function () {
 
     // Siempre disponibles (incluso con workspace bloqueado)
     Route::get('/user', [AuthController::class, 'me'])->name('user.me');
     Route::post('/me/workspace', [AuthController::class, 'setCurrentWorkspace'])->name('user.workspace');
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
+    Route::get('/integrations/google-calendar/status', [GoogleCalendarIntegrationController::class, 'status']);
+    Route::get('/integrations/google-calendar/redirect', [GoogleCalendarIntegrationController::class, 'redirect']);
+    Route::delete('/integrations/google-calendar/disconnect', [GoogleCalendarIntegrationController::class, 'disconnect']);
 
     Route::get('/workspaces/{workspace}/billing', [BillingController::class, 'status'])
         ->name('billing.status');
@@ -91,5 +97,10 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::apiResource('poliza_vehiculos', PolizaVehiculoController::class)
             ->parameters(['poliza_vehiculos' => 'poliza_vehiculo']);
         Route::apiResource('poliza_documentos', PolizaDocumentoController::class);
+
+        Route::get('calendar/events', [CalendarController::class, 'events']);
+        Route::post('calendar/events', [CalendarController::class, 'store']);
+        Route::put('calendar/events/{event}', [CalendarController::class, 'update']);
+        Route::delete('calendar/events/{event}', [CalendarController::class, 'destroy']);
     });
 });
