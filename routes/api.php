@@ -43,7 +43,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     // Siempre disponibles (incluso con workspace bloqueado)
     Route::get('/user', [AuthController::class, 'me'])->name('user.me');
     Route::post('/me/workspace', [AuthController::class, 'setCurrentWorkspace'])->name('user.workspace');
-    Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
+    Route::post('/logout', [AuthController::class, 'logout'])->name('api.logout');
     Route::get('/integrations/google-calendar/status', [GoogleCalendarIntegrationController::class, 'status']);
     Route::get('/integrations/google-calendar/redirect', [GoogleCalendarIntegrationController::class, 'redirect']);
     Route::delete('/integrations/google-calendar/disconnect', [GoogleCalendarIntegrationController::class, 'disconnect']);

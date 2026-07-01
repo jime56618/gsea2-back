@@ -12,7 +12,7 @@ import { hasPermission } from '../utils/permissions';
 
 const AuthContext = createContext(null);
 
-export function AuthProvider({ children }) {
+export function AuthProvider(envenv{ children }) {
   const navigate = useNavigate();
   const [session, setSession] = useState(() => getAuthSession());
   const [loading, setLoading] = useState(true);
