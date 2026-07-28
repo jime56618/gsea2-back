@@ -39,14 +39,14 @@ class AuthController extends Controller
         $user = User::where('email', $credentials['email'])->first();
 
         if (! $user || ! Hash::check($credentials['password'], $user->password)) {
-            RateLimiter::hit($this->loginThrottleKey($request));
+            $this->hitLoginRateLimit($request);
 
             throw ValidationException::withMessages([
                 'email' => [__('auth.failed')],
             ]);
         }
 
-        RateLimiter::clear($this->loginThrottleKey($request));
+        $this->clearLoginRateLimit($request);
 
         $device = $credentials['device_name'] ?? 'api';
         $token = $user->createToken($device)->plainTextToken;
@@ -143,11 +143,16 @@ class AuthController extends Controller
 
     private function ensureLoginNotRateLimited(Request $request): void
     {
-        if (! RateLimiter::tooManyAttempts($this->loginThrottleKey($request), 5)) {
+        try {
+            if (! RateLimiter::tooManyAttempts($this->loginThrottleKey($request), 5)) {
+                return;
+            }
+
+            $seconds = RateLimiter::availableIn($this->loginThrottleKey($request));
+        } catch (\Throwable) {
+            // Si el cache/DB del rate limit falla, no tumbar el login.
             return;
         }
-
-        $seconds = RateLimiter::availableIn($this->loginThrottleKey($request));
 
         throw ValidationException::withMessages([
             'email' => [trans('auth.throttle', [
@@ -155,6 +160,24 @@ class AuthController extends Controller
                 'minutes' => ceil($seconds / 60),
             ])],
         ]);
+    }
+
+    private function hitLoginRateLimit(Request $request): void
+    {
+        try {
+            RateLimiter::hit($this->loginThrottleKey($request));
+        } catch (\Throwable) {
+            // ignore
+        }
+    }
+
+    private function clearLoginRateLimit(Request $request): void
+    {
+        try {
+            RateLimiter::clear($this->loginThrottleKey($request));
+        } catch (\Throwable) {
+            // ignore
+        }
     }
 
     private function loginThrottleKey(Request $request): string

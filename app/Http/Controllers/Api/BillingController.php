@@ -31,17 +31,25 @@ class BillingController extends BaseApiController
 
     /**
      * Simula activación tras pago. En producción lo llamará el webhook de Stripe.
+     * Owner del workspace o quien tenga billing.manage puede activar.
      */
     public function activate(Request $request, Workspace $workspace): JsonResponse
     {
         $this->ensureMemberOfWorkspace($request, $workspace);
-        $this->authorization->authorize($request->user(), $workspace->id, 'billing.manage');
+
+        $user = $request->user();
+        $isOwner = (int) $workspace->owner_id === (int) $user->id;
+
+        if (! $isOwner) {
+            $this->authorization->authorize($user, $workspace->id, 'billing.manage');
+        }
 
         $subscription = $this->subscriptions->activatePaid($workspace);
 
         return response()->json([
             'message' => 'Suscripción activada correctamente.',
             'subscription' => $this->subscriptions->toApiArray($workspace->fresh(['plan', 'subscription.plan'])),
+            'workspace_subscription' => $subscription,
         ]);
     }
 

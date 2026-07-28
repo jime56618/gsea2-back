@@ -7,16 +7,24 @@ import './css/SaaS.css';
 
 /** Estado de suscripción y activación manual (hasta integrar Stripe). */
 export default function BillingSettings() {
-  const { subscription, refresh, can, currentWorkspace } = useAuth();
+  const { subscription, refresh, can, currentWorkspace, user } = useAuth();
   const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activating, setActivating] = useState(false);
   const [msg, setMsg] = useState('');
 
-  const workspaceId = getActiveWorkspaceId();
+  const workspaceId = getActiveWorkspaceId() || currentWorkspace?.id || null;
+  const isOwner =
+    currentWorkspace?.owner_id != null &&
+    user?.id != null &&
+    Number(currentWorkspace.owner_id) === Number(user.id);
+  const canManageBilling = can('billing.manage') || isOwner;
 
   useEffect(() => {
-    if (!workspaceId) return;
+    if (!workspaceId) {
+      setLoading(false);
+      return;
+    }
     apiFetch(`/workspaces/${workspaceId}/billing`)
       .then(setDetail)
       .catch((e) => setMsg(e.message))
@@ -24,22 +32,29 @@ export default function BillingSettings() {
   }, [workspaceId]);
 
   const handleActivate = async () => {
+    if (!workspaceId) {
+      setMsg('No hay workspace activo.');
+      return;
+    }
     setActivating(true);
     setMsg('');
     try {
-      await apiFetch(`/workspaces/${workspaceId}/billing/activate`, { method: 'POST' });
+      await apiFetch(`/workspaces/${workspaceId}/billing/activate`, {
+        method: 'POST',
+        body: JSON.stringify({}),
+      });
       await refresh();
       const d = await apiFetch(`/workspaces/${workspaceId}/billing`);
       setDetail(d);
       setMsg('Plan activado correctamente.');
     } catch (e) {
-      setMsg(e.message);
+      setMsg(e.body?.message || e.message);
     } finally {
       setActivating(false);
     }
   };
 
-  if (!can('billing.manage')) {
+  if (!canManageBilling) {
     return (
       <AppShell>
         <div className="gsea-config-page">

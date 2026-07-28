@@ -12,3 +12,5 @@ Artisan::command('inspire', function () {
 Schedule::command('subscriptions:expire-trials')->daily();
 
 Schedule::command('google-calendar:sync')->everyMinute();
+
+Schedule::command('whatsapp:send-due-reminders')->dailyAt('09:00');

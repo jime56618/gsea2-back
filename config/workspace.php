@@ -17,6 +17,7 @@ return [
         'user.me',
         'user.workspace',
         'logout',
+        'api.logout',
         'billing.status',
         'billing.activate',
         'invitations.accept',

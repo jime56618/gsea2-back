@@ -8,6 +8,7 @@ use App\Models\Poliza;
 use App\Models\PolizaVehiculo;
 use App\Models\Subramo;
 use App\Services\CobranzaCuotasGenerator;
+use App\Services\WhatsApp\CobranzaReminderPlanner;
 use App\Support\WorkspacePermissions;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -15,7 +16,8 @@ use Illuminate\Support\Facades\DB;
 class PolizaController extends BaseApiController
 {
     public function __construct(
-        private CobranzaCuotasGenerator $cobranzaCuotasGenerator
+        private CobranzaCuotasGenerator $cobranzaCuotasGenerator,
+        private CobranzaReminderPlanner $whatsappReminderPlanner,
     ) {}
 
     public function index(Request $request)
@@ -62,7 +64,7 @@ class PolizaController extends BaseApiController
             'iva' => 'nullable|numeric|min:0',
             'prima_total' => 'nullable|numeric|min:0',
             'moneda' => 'nullable|string|max:10',
-            'frecuencia_cobro' => 'nullable|in:unico,mensual,trimestral',
+            'frecuencia_cobro' => 'nullable|in:unico,mensual,trimestral,semestral,anual',
             'monto_cuota' => 'nullable|numeric|min:0',
             'telefono_notificacion' => 'nullable|string|max:30',
             'vehiculo' => 'nullable|array',
@@ -147,6 +149,7 @@ class PolizaController extends BaseApiController
 
             $poliza->load('contratante');
             $this->cobranzaCuotasGenerator->syncForPoliza($poliza);
+            $this->whatsappReminderPlanner->syncForPoliza($poliza->fresh(), isNewPoliza: true);
 
             return response()->json(
                 $poliza->fresh()->load([
@@ -202,7 +205,7 @@ class PolizaController extends BaseApiController
             'iva' => 'nullable|numeric|min:0',
             'prima_total' => 'nullable|numeric|min:0',
             'moneda' => 'nullable|string|max:10',
-            'frecuencia_cobro' => 'nullable|in:unico,mensual,trimestral',
+            'frecuencia_cobro' => 'nullable|in:unico,mensual,trimestral,semestral,anual',
             'monto_cuota' => 'nullable|numeric|min:0',
             'telefono_notificacion' => 'nullable|string|max:30',
             'vehiculo' => 'nullable|array',
@@ -315,6 +318,7 @@ class PolizaController extends BaseApiController
                 $poliza->refresh();
                 $poliza->load('contratante');
                 $this->cobranzaCuotasGenerator->syncForPoliza($poliza);
+                $this->whatsappReminderPlanner->syncForPoliza($poliza->fresh(), isNewPoliza: false);
             }
 
             return $poliza->fresh()->load([

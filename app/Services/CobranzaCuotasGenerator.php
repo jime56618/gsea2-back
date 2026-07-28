@@ -39,6 +39,8 @@ class CobranzaCuotasGenerator
         $fechas = match ($freq) {
             'mensual' => $this->fechasRecurrentes($inicio, $fin, fn (Carbon $d) => $d->copy()->addMonth()),
             'trimestral' => $this->fechasRecurrentes($inicio, $fin, fn (Carbon $d) => $d->copy()->addMonths(3)),
+            'semestral' => $this->fechasRecurrentes($inicio, $fin, fn (Carbon $d) => $d->copy()->addMonths(6)),
+            'anual' => $this->fechasRecurrentes($inicio, $fin, fn (Carbon $d) => $d->copy()->addYear()),
             default => collect([$inicio->copy()]),
         };
 

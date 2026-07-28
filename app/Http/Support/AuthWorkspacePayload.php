@@ -60,6 +60,8 @@ class AuthWorkspacePayload
      */
     private function workspaceDetail(Workspace $ws, $membership, array $permissions): array
     {
+        $role = $membership?->role;
+
         return [
             'id' => $ws->id,
             'nombre' => $ws->nombre,
@@ -67,12 +69,12 @@ class AuthWorkspacePayload
             'owner_id' => $ws->owner_id,
             'subscription' => $this->subscriptions->toApiArray($ws),
             'membership' => $membership ? [
-                'role' => [
-                    'id' => $membership->role->id,
-                    'nombre' => $membership->role->nombre,
-                    'slug' => $membership->role->slug,
-                    'is_system' => $membership->role->is_system,
-                ],
+                'role' => $role ? [
+                    'id' => $role->id,
+                    'nombre' => $role->nombre,
+                    'slug' => $role->slug,
+                    'is_system' => (bool) $role->is_system,
+                ] : null,
                 'permissions' => $permissions,
             ] : null,
         ];

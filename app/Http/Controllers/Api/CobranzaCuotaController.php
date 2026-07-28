@@ -4,11 +4,15 @@ namespace App\Http\Controllers\Api;
 
 use App\Models\CobranzaCuota;
 use App\Models\Poliza;
+use App\Services\WhatsApp\CobranzaReminderPlanner;
 use App\Support\WorkspacePermissions;
 use Illuminate\Http\Request;
 
 class CobranzaCuotaController extends BaseApiController
 {
+    public function __construct(
+        private CobranzaReminderPlanner $whatsappReminderPlanner,
+    ) {}
     public function index(Request $request)
     {
         $this->requirePermission($request, WorkspacePermissions::COBRANZA_VIEW);
@@ -79,6 +83,10 @@ class CobranzaCuotaController extends BaseApiController
             'telefono_notificacion' => $data['telefono_notificacion'] ?? null,
         ]);
 
+        if (($data['estatus'] ?? 'pendiente') === 'pendiente') {
+            $this->whatsappReminderPlanner->planForCuota($cuota);
+        }
+
         return response()->json($cuota->load(['poliza.contratante']), 201);
     }
 
@@ -103,6 +111,16 @@ class CobranzaCuotaController extends BaseApiController
         ]);
 
         $cobranzaCuota->update($data);
+
+        if (isset($data['estatus']) && $data['estatus'] === 'pagado') {
+            $this->whatsappReminderPlanner->cancelPendingForCuota($cobranzaCuota);
+        } elseif (
+            ($data['estatus'] ?? $cobranzaCuota->estatus) === 'pendiente'
+            && (isset($data['fecha_programada']) || isset($data['telefono_notificacion']))
+        ) {
+            $this->whatsappReminderPlanner->cancelPendingForCuota($cobranzaCuota);
+            $this->whatsappReminderPlanner->planForCuota($cobranzaCuota->fresh());
+        }
 
         return $cobranzaCuota->fresh()->load(['poliza.contratante']);
     }
