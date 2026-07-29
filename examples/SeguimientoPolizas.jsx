@@ -10,7 +10,9 @@
  *
  * Backend POST /api/polizas exige: contratante_id, aseguradora_id, ramo_id, subramo_id,
  * numero_poliza, inicio_vigencia, fin_vigencia; opcional agente_id (id de agente_workspaces),
- * fecha_emision, primas, vehiculo, etc.
+ * fecha_emision, primas, vehiculo, cobranza (frecuencia_cobro: unico|mensual|trimestral,
+ * monto_cuota, telefono_notificacion). Las cuotas se generan en cobranza_cuotas al guardar.
+ * Calendario: GET /api/calendar/cobranza-cuotas?year=2026&month=4 (o from, to).
  */
 
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
@@ -33,33 +35,13 @@ import {
   Copy,
 } from 'lucide-react';
 
-import Sidebar from '../components/Sidebar';
-import Navbar from '../components/Navbar';
+import Sidebar from './Sidebar';
+import Navbar from './Navbar';
 import './css/SeguimientoPolizas.css';
 
+import { apiFetch, fetchJson } from './utils/apiClient';
+
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
-
-function authHeaders() {
-  const token = localStorage.getItem('token');
-  return {
-    'Content-Type': 'application/json',
-    Accept: 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-  };
-}
-
-async function fetchJson(url, options = {}) {
-  const res = await fetch(url, { ...options, headers: { ...authHeaders(), ...options.headers } });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    const msg =
-      data.message ||
-      (data.errors && Object.values(data.errors).flat().join(' ')) ||
-      `Error HTTP ${res.status}`;
-    throw new Error(msg);
-  }
-  return data;
-}
 
 /** Vigencia mostrada = fin de vigencia (como tu mock). Estatus derivado de fechas (no hay campo en BD). */
 function mapPolizaFromApi(p) {
@@ -115,7 +97,51 @@ const emptyForm = () => ({
   iva: '',
   prima_total: '',
   moneda: 'MXN',
+  frecuencia_cobro: 'unico',
+  monto_cuota: '',
+  telefono_notificacion: '',
 });
+
+const IVA_RATE = 0.16;
+
+function roundMoney(n) {
+  return Math.round((Number(n) + Number.EPSILON) * 100) / 100;
+}
+
+function divisorFrecuencia(freq) {
+  switch (freq) {
+    case 'mensual':
+      return 12;
+    case 'trimestral':
+      return 4;
+    case 'semestral':
+      return 2;
+    case 'anual':
+    case 'unico':
+    default:
+      return 1;
+  }
+}
+
+/** Autocompleta IVA, total y cuota al cambiar prima neta o frecuencia. */
+function applyPremiumCalc(prev, patch = {}) {
+  const next = { ...prev, ...patch };
+  const neta = next.prima_neta === '' ? null : Number(next.prima_neta);
+  const freq = next.frecuencia_cobro || 'unico';
+
+  if (neta != null && !Number.isNaN(neta) && neta >= 0) {
+    const iva = roundMoney(neta * IVA_RATE);
+    const total = roundMoney(neta + iva);
+    next.iva = String(iva);
+    next.prima_total = String(total);
+    next.monto_cuota = String(roundMoney(total / divisorFrecuencia(freq)));
+  } else if (next.prima_total !== '' && !Number.isNaN(Number(next.prima_total))) {
+    const total = Number(next.prima_total);
+    next.monto_cuota = String(roundMoney(total / divisorFrecuencia(freq)));
+  }
+
+  return next;
+}
 
 const SeguimientoPolizas = () => {
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
@@ -236,15 +262,7 @@ const SeguimientoPolizas = () => {
   const handleDeleteConfirm = async () => {
     if (!selectedPoliza?.id) return;
     try {
-      await fetch(`${API_URL}/polizas/${selectedPoliza.id}`, {
-        method: 'DELETE',
-        headers: authHeaders(),
-      }).then(async (res) => {
-        if (!res.ok) {
-          const d = await res.json().catch(() => ({}));
-          throw new Error(d.message || `Error ${res.status}`);
-        }
-      });
+      await apiFetch(`/polizas/${selectedPoliza.id}`, { method: 'DELETE' });
       setModalType(null);
       setSelectedPoliza(null);
       setActiveMenuId(null);
@@ -564,6 +582,9 @@ const ModalManager = ({ type, data, catalogos, onClose, onSaved, onDeleteConfirm
         iva: p.iva != null ? String(p.iva) : '',
         prima_total: p.prima_total != null ? String(p.prima_total) : '',
         moneda: p.moneda || 'MXN',
+        frecuencia_cobro: p.frecuencia_cobro || 'unico',
+        monto_cuota: p.monto_cuota != null ? String(p.monto_cuota) : '',
+        telefono_notificacion: p.telefono_notificacion || '',
       });
     } else if (type === 'add') {
       setFormData(emptyForm());
@@ -597,6 +618,10 @@ const ModalManager = ({ type, data, catalogos, onClose, onSaved, onDeleteConfirm
     if (formData.prima_neta !== '') payload.prima_neta = Number(formData.prima_neta);
     if (formData.iva !== '') payload.iva = Number(formData.iva);
     if (formData.prima_total !== '') payload.prima_total = Number(formData.prima_total);
+    if (formData.frecuencia_cobro) payload.frecuencia_cobro = formData.frecuencia_cobro;
+    if (formData.monto_cuota !== '') payload.monto_cuota = Number(formData.monto_cuota);
+    if (formData.telefono_notificacion.trim())
+      payload.telefono_notificacion = formData.telefono_notificacion.trim();
     return payload;
   };
 
@@ -837,17 +862,20 @@ const ModalManager = ({ type, data, catalogos, onClose, onSaved, onDeleteConfirm
                     step="0.01"
                     min="0"
                     value={formData.prima_neta}
-                    onChange={(e) => setFormData({ ...formData, prima_neta: e.target.value })}
+                    onChange={(e) =>
+                      setFormData((prev) => applyPremiumCalc(prev, { prima_neta: e.target.value }))
+                    }
                   />
                 </div>
                 <div className="polizas-form-group">
-                  <label>IVA</label>
+                  <label>IVA (16%)</label>
                   <input
                     type="number"
                     step="0.01"
                     min="0"
                     value={formData.iva}
-                    onChange={(e) => setFormData({ ...formData, iva: e.target.value })}
+                    readOnly
+                    title="Se calcula automáticamente: prima neta × 16%"
                   />
                 </div>
                 <div className="polizas-form-group">
@@ -857,7 +885,50 @@ const ModalManager = ({ type, data, catalogos, onClose, onSaved, onDeleteConfirm
                     step="0.01"
                     min="0"
                     value={formData.prima_total}
-                    onChange={(e) => setFormData({ ...formData, prima_total: e.target.value })}
+                    readOnly
+                    title="Se calcula automáticamente: prima neta + IVA"
+                  />
+                </div>
+              </div>
+
+              <div className="polizas-form-row">
+                <div className="polizas-form-group">
+                  <label>Frecuencia de cobro</label>
+                  <select
+                    value={formData.frecuencia_cobro}
+                    onChange={(e) =>
+                      setFormData((prev) =>
+                        applyPremiumCalc(prev, { frecuencia_cobro: e.target.value })
+                      )
+                    }
+                  >
+                    <option value="unico">Único</option>
+                    <option value="mensual">Mensual</option>
+                    <option value="trimestral">Trimestral</option>
+                    <option value="semestral">Semestral</option>
+                    <option value="anual">Anual</option>
+                  </select>
+                </div>
+                <div className="polizas-form-group">
+                  <label>Monto por cuota</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={formData.monto_cuota}
+                    readOnly
+                    title="Se calcula automáticamente según la frecuencia"
+                    placeholder="Automático según frecuencia"
+                  />
+                </div>
+                <div className="polizas-form-group">
+                  <label>Tel. notificación cobranza</label>
+                  <input
+                    value={formData.telefono_notificacion}
+                    onChange={(e) =>
+                      setFormData({ ...formData, telefono_notificacion: e.target.value })
+                    }
+                    placeholder="Opcional; si vacío, tel. del contratante"
                   />
                 </div>
               </div>

@@ -109,12 +109,29 @@ class WhatsAppGateway
 
         $empresa = $poliza?->workspace?->nombre ?? config('app.name', 'G-SEA');
         $numero = $poliza?->numero_poliza ?? '—';
+
+        // Alta a veces no traía cuota ligada: usar primera cuota pendiente o monto_cuota de la póliza.
+        if ($cuota === null && $poliza) {
+            $cuota = $poliza->cobranzaCuotas()
+                ->where('estatus', 'pendiente')
+                ->orderBy('fecha_programada')
+                ->orderBy('numero_cuota')
+                ->first();
+        }
+
         $fecha = $cuota?->fecha_programada
             ? $cuota->fecha_programada->format('d/m/Y')
             : '—';
-        $monto = $cuota
-            ? '$'.number_format((float) $cuota->monto, 2).' '.($poliza->moneda ?? 'MXN')
-            : '—';
+
+        if ($cuota) {
+            $monto = '$'.number_format((float) $cuota->monto, 2).' '.($poliza->moneda ?? 'MXN');
+        } elseif ($poliza?->monto_cuota !== null) {
+            $monto = '$'.number_format((float) $poliza->monto_cuota, 2).' '.($poliza->moneda ?? 'MXN');
+        } elseif ($poliza?->prima_total !== null) {
+            $monto = '$'.number_format((float) $poliza->prima_total, 2).' '.($poliza->moneda ?? 'MXN');
+        } else {
+            $monto = '—';
+        }
 
         // Orden alineado a plantillas sugeridas en docs/WHATSAPP_YCLOUD_SETUP.md
         return match ($notification->tipo) {

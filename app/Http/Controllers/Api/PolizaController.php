@@ -8,6 +8,7 @@ use App\Models\Poliza;
 use App\Models\PolizaVehiculo;
 use App\Models\Subramo;
 use App\Services\CobranzaCuotasGenerator;
+use App\Services\PolizaPremiumCalculator;
 use App\Services\WhatsApp\CobranzaReminderPlanner;
 use App\Support\WorkspacePermissions;
 use Illuminate\Http\Request;
@@ -18,6 +19,7 @@ class PolizaController extends BaseApiController
     public function __construct(
         private CobranzaCuotasGenerator $cobranzaCuotasGenerator,
         private CobranzaReminderPlanner $whatsappReminderPlanner,
+        private PolizaPremiumCalculator $premiumCalculator,
     ) {}
 
     public function index(Request $request)
@@ -115,6 +117,8 @@ class PolizaController extends BaseApiController
                 'message' => 'El subramo no corresponde al ramo indicado.',
             ], 422);
         }
+
+        $data = $this->premiumCalculator->apply($data);
 
         return DB::transaction(function () use ($data, $request, $workspaceId) {
             $poliza = Poliza::create([
@@ -262,6 +266,18 @@ class PolizaController extends BaseApiController
             }
         }
 
+        $moneyTouched = collect(['prima_neta', 'iva', 'prima_total', 'frecuencia_cobro', 'monto_cuota'])
+            ->contains(fn (string $k) => array_key_exists($k, $data));
+
+        if ($moneyTouched) {
+            $data = $this->premiumCalculator->apply(
+                $data,
+                $poliza->prima_neta !== null ? (float) $poliza->prima_neta : null,
+                $poliza->prima_total !== null ? (float) $poliza->prima_total : null,
+                $poliza->frecuencia_cobro,
+            );
+        }
+
         return DB::transaction(function () use ($request, $poliza, $data) {
             $keys = [
                 'workspace_id',
@@ -293,6 +309,8 @@ class PolizaController extends BaseApiController
                 'telefono_notificacion',
                 'inicio_vigencia',
                 'fin_vigencia',
+                'prima_neta',
+                'iva',
                 'prima_total',
             ];
             $shouldSyncCuotas = ! empty(array_intersect(array_keys($updates), $cuotasKeys));

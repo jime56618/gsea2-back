@@ -102,6 +102,47 @@ const emptyForm = () => ({
   telefono_notificacion: '',
 });
 
+const IVA_RATE = 0.16;
+
+function roundMoney(n) {
+  return Math.round((Number(n) + Number.EPSILON) * 100) / 100;
+}
+
+function divisorFrecuencia(freq) {
+  switch (freq) {
+    case 'mensual':
+      return 12;
+    case 'trimestral':
+      return 4;
+    case 'semestral':
+      return 2;
+    case 'anual':
+    case 'unico':
+    default:
+      return 1;
+  }
+}
+
+/** Autocompleta IVA, total y cuota al cambiar prima neta o frecuencia. */
+function applyPremiumCalc(prev, patch = {}) {
+  const next = { ...prev, ...patch };
+  const neta = next.prima_neta === '' ? null : Number(next.prima_neta);
+  const freq = next.frecuencia_cobro || 'unico';
+
+  if (neta != null && !Number.isNaN(neta) && neta >= 0) {
+    const iva = roundMoney(neta * IVA_RATE);
+    const total = roundMoney(neta + iva);
+    next.iva = String(iva);
+    next.prima_total = String(total);
+    next.monto_cuota = String(roundMoney(total / divisorFrecuencia(freq)));
+  } else if (next.prima_total !== '' && !Number.isNaN(Number(next.prima_total))) {
+    const total = Number(next.prima_total);
+    next.monto_cuota = String(roundMoney(total / divisorFrecuencia(freq)));
+  }
+
+  return next;
+}
+
 const SeguimientoPolizas = () => {
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
   const [polizas, setPolizas] = useState([]);
@@ -821,17 +862,20 @@ const ModalManager = ({ type, data, catalogos, onClose, onSaved, onDeleteConfirm
                     step="0.01"
                     min="0"
                     value={formData.prima_neta}
-                    onChange={(e) => setFormData({ ...formData, prima_neta: e.target.value })}
+                    onChange={(e) =>
+                      setFormData((prev) => applyPremiumCalc(prev, { prima_neta: e.target.value }))
+                    }
                   />
                 </div>
                 <div className="polizas-form-group">
-                  <label>IVA</label>
+                  <label>IVA (16%)</label>
                   <input
                     type="number"
                     step="0.01"
                     min="0"
                     value={formData.iva}
-                    onChange={(e) => setFormData({ ...formData, iva: e.target.value })}
+                    readOnly
+                    title="Se calcula automáticamente: prima neta × 16%"
                   />
                 </div>
                 <div className="polizas-form-group">
@@ -841,7 +885,8 @@ const ModalManager = ({ type, data, catalogos, onClose, onSaved, onDeleteConfirm
                     step="0.01"
                     min="0"
                     value={formData.prima_total}
-                    onChange={(e) => setFormData({ ...formData, prima_total: e.target.value })}
+                    readOnly
+                    title="Se calcula automáticamente: prima neta + IVA"
                   />
                 </div>
               </div>
@@ -851,11 +896,17 @@ const ModalManager = ({ type, data, catalogos, onClose, onSaved, onDeleteConfirm
                   <label>Frecuencia de cobro</label>
                   <select
                     value={formData.frecuencia_cobro}
-                    onChange={(e) => setFormData({ ...formData, frecuencia_cobro: e.target.value })}
+                    onChange={(e) =>
+                      setFormData((prev) =>
+                        applyPremiumCalc(prev, { frecuencia_cobro: e.target.value })
+                      )
+                    }
                   >
                     <option value="unico">Único</option>
                     <option value="mensual">Mensual</option>
                     <option value="trimestral">Trimestral</option>
+                    <option value="semestral">Semestral</option>
+                    <option value="anual">Anual</option>
                   </select>
                 </div>
                 <div className="polizas-form-group">
@@ -865,8 +916,9 @@ const ModalManager = ({ type, data, catalogos, onClose, onSaved, onDeleteConfirm
                     step="0.01"
                     min="0"
                     value={formData.monto_cuota}
-                    onChange={(e) => setFormData({ ...formData, monto_cuota: e.target.value })}
-                    placeholder="Si vacío y hay prima total, se usa prima total"
+                    readOnly
+                    title="Se calcula automáticamente según la frecuencia"
+                    placeholder="Automático según frecuencia"
                   />
                 </div>
                 <div className="polizas-form-group">

@@ -174,7 +174,7 @@ class CobranzaReminderPlanner
         WhatsappNotification::create([
             'workspace_id' => $poliza->workspace_id,
             'poliza_id' => $poliza->id,
-            'cobranza_cuota_id' => null,
+            'cobranza_cuota_id' => $proximaCuota->id,
             'tipo' => WhatsappNotification::TIPO_ALTA,
             'telefono' => $telefono,
             'mensaje' => WhatsappMessageBuilder::build(WhatsappNotification::TIPO_ALTA, $poliza, $proximaCuota),
