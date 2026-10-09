@@ -17,6 +17,17 @@ class WhatsappNotification extends Model
 
     public const TIPO_DIA_PAGO = 'dia_pago';
 
+    /** Recordatorios por fin de vigencia de la póliza. */
+    public const TIPO_VIGENCIA_30D = 'vigencia_30d';
+
+    public const TIPO_VIGENCIA_15D = 'vigencia_15d';
+
+    public const TIPO_VIGENCIA_7D = 'vigencia_7d';
+
+    public const TIPO_VIGENCIA_1D = 'vigencia_1d';
+
+    public const TIPO_VIGENCIA_HOY = 'vigencia_hoy';
+
     public const ESTATUS_PENDIENTE = 'pendiente';
 
     public const ESTATUS_ENVIADO = 'enviado';

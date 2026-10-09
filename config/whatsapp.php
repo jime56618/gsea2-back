@@ -15,6 +15,15 @@ return [
         array_filter(explode(',', env('WHATSAPP_REMINDER_OFFSETS', '7,3,1,0')))
     ),
 
+    /**
+     * Días antes de fin_vigencia para avisar que la póliza está por vencer.
+     * Default: 30, 15, 7, 1 y el día del vencimiento (0).
+     */
+    'vigencia_offsets_days' => array_map(
+        'intval',
+        array_filter(explode(',', env('WHATSAPP_VIGENCIA_OFFSETS', '30,15,7,1,0')))
+    ),
+
     /** Enviar mensaje de alta al crear/regenerar póliza (si hay teléfono). */
     'send_alta_on_poliza_sync' => env('WHATSAPP_SEND_ALTA_ON_POLIZA', true),
 
@@ -34,6 +43,8 @@ return [
             'alta' => env('YCLOUD_TEMPLATE_ALTA', 'g_pruebas'),
             'recordatorio' => env('YCLOUD_TEMPLATE_RECORDATORIO', 'gsea_recordatorio_pago'),
             'dia_pago' => env('YCLOUD_TEMPLATE_DIA_PAGO', 'gsea_dia_pago'),
+            /** Plantilla de vencimiento: {{1}}nombre {{2}}póliza {{3}}aseguradora {{4}}fecha {{5}}días */
+            'vencimiento' => env('YCLOUD_TEMPLATE_VENCIMIENTO', 'g_pruebas2'),
             'test' => env('YCLOUD_TEMPLATE_TEST'),
         ],
     ],

@@ -82,7 +82,12 @@ class WhatsAppGateway
             WhatsappNotification::TIPO_RECORDATORIO_3D => 'recordatorio',
             WhatsappNotification::TIPO_RECORDATORIO_1D => 'recordatorio',
             WhatsappNotification::TIPO_DIA_PAGO => 'dia_pago',
-            default => null,
+            WhatsappNotification::TIPO_VIGENCIA_30D,
+            WhatsappNotification::TIPO_VIGENCIA_15D,
+            WhatsappNotification::TIPO_VIGENCIA_7D,
+            WhatsappNotification::TIPO_VIGENCIA_1D,
+            WhatsappNotification::TIPO_VIGENCIA_HOY => 'vencimiento',
+            default => str_starts_with($tipo, 'vigencia_') ? 'vencimiento' : null,
         };
 
         if ($key === null) {
@@ -97,7 +102,12 @@ class WhatsAppGateway
     /** @return list<string> */
     private function templateParams(WhatsappNotification $notification): array
     {
-        $notification->loadMissing(['poliza.contratante', 'poliza.workspace', 'cobranzaCuota']);
+        $notification->loadMissing([
+            'poliza.contratante',
+            'poliza.workspace',
+            'poliza.aseguradora',
+            'cobranzaCuota',
+        ]);
 
         $poliza = $notification->poliza;
         $cuota = $notification->cobranzaCuota;
@@ -109,6 +119,23 @@ class WhatsAppGateway
 
         $empresa = $poliza?->workspace?->nombre ?? config('app.name', 'G-SEA');
         $numero = $poliza?->numero_poliza ?? '—';
+        $aseguradora = $poliza?->aseguradora?->nombre ?? $empresa;
+
+        if (str_starts_with($notification->tipo, 'vigencia_')) {
+            $days = WhatsappMessageBuilder::offsetFromVigenciaTipo($notification->tipo);
+            $fechaFin = $poliza?->fin_vigencia
+                ? $poliza->fin_vigencia->format('d/m/Y')
+                : '—';
+
+            // g_pruebas2: {{1}}nombre {{2}}póliza {{3}}aseguradora {{4}}fecha {{5}}días
+            return [
+                $nombre,
+                $numero,
+                $aseguradora,
+                $fechaFin,
+                WhatsappMessageBuilder::textoDiasRestantes($days),
+            ];
+        }
 
         // Alta a veces no traía cuota ligada: usar primera cuota pendiente o monto_cuota de la póliza.
         if ($cuota === null && $poliza) {

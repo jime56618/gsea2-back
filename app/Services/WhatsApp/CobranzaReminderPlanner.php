@@ -31,6 +31,7 @@ class CobranzaReminderPlanner
         WhatsappNotification::query()
             ->where('poliza_id', $poliza->id)
             ->where('estatus', WhatsappNotification::ESTATUS_PENDIENTE)
+            ->where('tipo', 'not like', 'vigencia_%')
             ->delete();
 
         $cuotas = $poliza->cobranzaCuotas()
@@ -39,51 +40,49 @@ class CobranzaReminderPlanner
             ->orderBy('numero_cuota')
             ->get();
 
-        if ($cuotas->isEmpty()) {
-            return;
-        }
-
         $offsets = config('whatsapp.reminder_offsets_days', [7, 3, 1, 0]);
         $today = Carbon::today(config('whatsapp.timezone'));
 
-        DB::transaction(function () use ($poliza, $cuotas, $offsets, $today, $isNewPoliza) {
-            foreach ($cuotas as $cuota) {
-                $telefono = $this->resolvePhone($cuota, $poliza);
-                if ($telefono === null) {
-                    continue;
-                }
-
-                foreach ($offsets as $days) {
-                    $days = (int) $days;
-                    $programado = Carbon::parse($cuota->fecha_programada)
-                        ->subDays($days)
-                        ->startOfDay();
-
-                    if ($programado->lt($today)) {
+        if ($cuotas->isNotEmpty()) {
+            DB::transaction(function () use ($poliza, $cuotas, $offsets, $today, $isNewPoliza) {
+                foreach ($cuotas as $cuota) {
+                    $telefono = $this->resolvePhone($cuota, $poliza);
+                    if ($telefono === null) {
                         continue;
                     }
 
-                    $tipo = WhatsappMessageBuilder::tipoForOffset($days);
+                    foreach ($offsets as $days) {
+                        $days = (int) $days;
+                        $programado = Carbon::parse($cuota->fecha_programada)
+                            ->subDays($days)
+                            ->startOfDay();
 
-                    WhatsappNotification::create([
-                        'workspace_id' => $poliza->workspace_id,
-                        'poliza_id' => $poliza->id,
-                        'cobranza_cuota_id' => $cuota->id,
-                        'tipo' => $tipo,
-                        'telefono' => $telefono,
-                        'mensaje' => WhatsappMessageBuilder::build($tipo, $poliza, $cuota),
-                        'estatus' => WhatsappNotification::ESTATUS_PENDIENTE,
-                        'programado_para' => $programado->toDateString(),
-                    ]);
+                        if ($programado->lt($today)) {
+                            continue;
+                        }
+
+                        $tipo = WhatsappMessageBuilder::tipoForOffset($days);
+
+                        WhatsappNotification::create([
+                            'workspace_id' => $poliza->workspace_id,
+                            'poliza_id' => $poliza->id,
+                            'cobranza_cuota_id' => $cuota->id,
+                            'tipo' => $tipo,
+                            'telefono' => $telefono,
+                            'mensaje' => WhatsappMessageBuilder::build($tipo, $poliza, $cuota),
+                            'estatus' => WhatsappNotification::ESTATUS_PENDIENTE,
+                            'programado_para' => $programado->toDateString(),
+                        ]);
+                    }
                 }
-            }
 
-            if ($isNewPoliza && config('whatsapp.send_alta_on_poliza_sync', true)) {
-                $this->scheduleAltaMessage($poliza, $cuotas->first());
-            }
-        });
+                if ($isNewPoliza && config('whatsapp.send_alta_on_poliza_sync', true)) {
+                    $this->scheduleAltaMessage($poliza, $cuotas->first());
+                }
+            });
+        }
 
-        if ($isNewPoliza && config('whatsapp.send_alta_on_poliza_sync', true)) {
+        if ($isNewPoliza && config('whatsapp.send_alta_on_poliza_sync', true) && $cuotas->isNotEmpty()) {
             $alta = WhatsappNotification::query()
                 ->where('poliza_id', $poliza->id)
                 ->where('tipo', WhatsappNotification::TIPO_ALTA)

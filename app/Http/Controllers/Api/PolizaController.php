@@ -10,6 +10,7 @@ use App\Models\Subramo;
 use App\Services\CobranzaCuotasGenerator;
 use App\Services\PolizaPremiumCalculator;
 use App\Services\WhatsApp\CobranzaReminderPlanner;
+use App\Services\WhatsApp\VigenciaReminderPlanner;
 use App\Support\WorkspacePermissions;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -19,6 +20,7 @@ class PolizaController extends BaseApiController
     public function __construct(
         private CobranzaCuotasGenerator $cobranzaCuotasGenerator,
         private CobranzaReminderPlanner $whatsappReminderPlanner,
+        private VigenciaReminderPlanner $vigenciaReminderPlanner,
         private PolizaPremiumCalculator $premiumCalculator,
     ) {}
 
@@ -153,7 +155,9 @@ class PolizaController extends BaseApiController
 
             $poliza->load('contratante');
             $this->cobranzaCuotasGenerator->syncForPoliza($poliza);
-            $this->whatsappReminderPlanner->syncForPoliza($poliza->fresh(), isNewPoliza: true);
+            $fresh = $poliza->fresh();
+            $this->whatsappReminderPlanner->syncForPoliza($fresh, isNewPoliza: true);
+            $this->vigenciaReminderPlanner->syncForPoliza($fresh);
 
             return response()->json(
                 $poliza->fresh()->load([
@@ -314,6 +318,11 @@ class PolizaController extends BaseApiController
                 'prima_total',
             ];
             $shouldSyncCuotas = ! empty(array_intersect(array_keys($updates), $cuotasKeys));
+            $shouldSyncVigencia = ! empty(array_intersect(array_keys($updates), [
+                'fin_vigencia',
+                'telefono_notificacion',
+                'contratante_id',
+            ]));
 
             if ($updates !== []) {
                 $poliza->update($updates);
@@ -337,6 +346,10 @@ class PolizaController extends BaseApiController
                 $poliza->load('contratante');
                 $this->cobranzaCuotasGenerator->syncForPoliza($poliza);
                 $this->whatsappReminderPlanner->syncForPoliza($poliza->fresh(), isNewPoliza: false);
+            }
+
+            if ($shouldSyncVigencia || $shouldSyncCuotas) {
+                $this->vigenciaReminderPlanner->syncForPoliza($poliza->fresh()->loadMissing(['contratante', 'aseguradora', 'workspace']));
             }
 
             return $poliza->fresh()->load([

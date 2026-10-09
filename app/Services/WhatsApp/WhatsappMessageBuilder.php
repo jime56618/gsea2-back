@@ -30,6 +30,12 @@ class WhatsappMessageBuilder
                 .'Te enviaremos avisos antes de cada fecha de pago.';
         }
 
+        if (str_starts_with($tipo, 'vigencia_')) {
+            $days = self::offsetFromVigenciaTipo($tipo);
+
+            return self::buildVigencia($tipo, $poliza, $days);
+        }
+
         if ($cuota === null) {
             return "¡Hola, {$nombre}! Recordatorio de tu póliza {$numero}.";
         }
@@ -58,6 +64,40 @@ class WhatsappMessageBuilder
             default => "¡Hola, {$nombre}!\n"
                 ."Recordatorio: póliza {$numero}, pago {$fecha}, {$monto}.",
         };
+    }
+
+    /**
+     * Texto / cuerpo plantilla g_pruebas2 (vencimiento).
+     */
+    public static function buildVigencia(string $tipo, Poliza $poliza, int $daysBefore): string
+    {
+        $poliza->loadMissing(['contratante', 'aseguradora', 'workspace']);
+        $nombre = self::nombreCliente($poliza);
+        $numero = $poliza->numero_poliza ?? '—';
+        $aseguradora = $poliza->aseguradora?->nombre ?? ($poliza->workspace?->nombre ?? 'G-SEA');
+        $fecha = $poliza->fin_vigencia
+            ? Carbon::parse($poliza->fin_vigencia)->format('d/m/Y')
+            : '—';
+        $diasTexto = self::textoDiasRestantes($daysBefore);
+
+        return "¡Hola, {$nombre}!\n"
+            ."Tu póliza {$numero} con {$aseguradora} vence el {$fecha}.\n"
+            ."Te recomendamos renovarla a tiempo.\n"
+            ."{$diasTexto}\n"
+            .'Contacta a tu asesor para más información.';
+    }
+
+    public static function textoDiasRestantes(int $daysBefore): string
+    {
+        if ($daysBefore <= 0) {
+            return 'Hoy vence tu póliza.';
+        }
+
+        if ($daysBefore === 1) {
+            return 'Falta 1 día para el vencimiento.';
+        }
+
+        return "Faltan {$daysBefore} días para el vencimiento.";
     }
 
     private static function nombreCliente(Poliza $poliza): string
@@ -99,6 +139,30 @@ class WhatsappMessageBuilder
             1 => WhatsappNotification::TIPO_RECORDATORIO_1D,
             0 => WhatsappNotification::TIPO_DIA_PAGO,
             default => 'recordatorio_'.$days.'d',
+        };
+    }
+
+    public static function tipoVigenciaForOffset(int $days): string
+    {
+        return match ($days) {
+            30 => WhatsappNotification::TIPO_VIGENCIA_30D,
+            15 => WhatsappNotification::TIPO_VIGENCIA_15D,
+            7 => WhatsappNotification::TIPO_VIGENCIA_7D,
+            1 => WhatsappNotification::TIPO_VIGENCIA_1D,
+            0 => WhatsappNotification::TIPO_VIGENCIA_HOY,
+            default => 'vigencia_'.$days.'d',
+        };
+    }
+
+    public static function offsetFromVigenciaTipo(string $tipo): int
+    {
+        return match ($tipo) {
+            WhatsappNotification::TIPO_VIGENCIA_30D => 30,
+            WhatsappNotification::TIPO_VIGENCIA_15D => 15,
+            WhatsappNotification::TIPO_VIGENCIA_7D => 7,
+            WhatsappNotification::TIPO_VIGENCIA_1D => 1,
+            WhatsappNotification::TIPO_VIGENCIA_HOY => 0,
+            default => (int) preg_replace('/\D+/', '', $tipo),
         };
     }
 }
