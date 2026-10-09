@@ -3,6 +3,7 @@
 namespace App\Services\WhatsApp;
 
 use App\Models\WhatsappNotification;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
 
 class WhatsappNotificationSender
@@ -50,5 +51,46 @@ class WhatsappNotificationSender
 
             return false;
         }
+    }
+
+    /**
+     * Envía de inmediato lo pendiente de una póliza con programado_para <= hoy
+     * (pago del día + vencimiento del día, etc.). Omite "alta" si ya se envió aparte.
+     *
+     * @return array{sent: int, failed: int}
+     */
+    public function sendDueForPoliza(int $polizaId, bool $includeAlta = false): array
+    {
+        $today = Carbon::today(config('whatsapp.timezone'))->toDateString();
+
+        $query = WhatsappNotification::query()
+            ->with('cobranzaCuota')
+            ->where('poliza_id', $polizaId)
+            ->where('estatus', WhatsappNotification::ESTATUS_PENDIENTE)
+            ->whereDate('programado_para', '<=', $today)
+            ->orderBy('id');
+
+        if (! $includeAlta) {
+            $query->where('tipo', '!=', WhatsappNotification::TIPO_ALTA);
+        }
+
+        $sent = 0;
+        $failed = 0;
+
+        foreach ($query->get() as $notification) {
+            if ($notification->cobranzaCuota && $notification->cobranzaCuota->estatus !== 'pendiente') {
+                $notification->update(['estatus' => WhatsappNotification::ESTATUS_CANCELADO]);
+
+                continue;
+            }
+
+            if ($this->send($notification)) {
+                $sent++;
+            } else {
+                $failed++;
+            }
+        }
+
+        return ['sent' => $sent, 'failed' => $failed];
     }
 }

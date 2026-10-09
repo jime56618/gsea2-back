@@ -112,6 +112,9 @@ Comandos:
 | `whatsapp:send-due-reminders --date=2026-08-01` | Fuerza una fecha |
 | `whatsapp:sync-vigencia` | Regenera avisos de vencimiento de pólizas vigentes |
 | `whatsapp:sync-vigencia --poliza=12` | Solo una póliza |
+| `whatsapp:send-vigencia 18` | Envía vencimiento de esa póliza (si toca hoy) |
+| `whatsapp:send-vigencia --hoy` | Envía vencimiento a todas las que vencen hoy |
+| `whatsapp:send-vigencia 18 --force` | Fuerza programado=hoy y envía |
 
 ---
 

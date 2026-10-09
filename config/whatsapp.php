@@ -1,5 +1,27 @@
 <?php
 
+/**
+ * Parsea lista de días desde .env (ej. "7,3,1,0").
+ * IMPORTANTE: no usar array_filter() sin callback — en PHP elimina el "0"
+ * y se pierde el aviso del día del pago / vencimiento.
+ *
+ * @return list<int>
+ */
+$parseDayOffsets = static function (?string $raw, string $default): array {
+    $parts = explode(',', $raw !== null && $raw !== '' ? $raw : $default);
+
+    $days = [];
+    foreach ($parts as $part) {
+        $part = trim($part);
+        if ($part === '') {
+            continue;
+        }
+        $days[] = (int) $part;
+    }
+
+    return $days;
+};
+
 return [
 
     'enabled' => env('WHATSAPP_ENABLED', false),
@@ -10,18 +32,18 @@ return [
     'provider' => env('WHATSAPP_PROVIDER', 'ycloud'),
 
     /** Días antes del pago en los que se envía recordatorio (7, 3, 1 y el día del pago). */
-    'reminder_offsets_days' => array_map(
-        'intval',
-        array_filter(explode(',', env('WHATSAPP_REMINDER_OFFSETS', '7,3,1,0')))
+    'reminder_offsets_days' => $parseDayOffsets(
+        env('WHATSAPP_REMINDER_OFFSETS'),
+        '7,3,1,0'
     ),
 
     /**
      * Días antes de fin_vigencia para avisar que la póliza está por vencer.
      * Default: 30, 15, 7, 1 y el día del vencimiento (0).
      */
-    'vigencia_offsets_days' => array_map(
-        'intval',
-        array_filter(explode(',', env('WHATSAPP_VIGENCIA_OFFSETS', '30,15,7,1,0')))
+    'vigencia_offsets_days' => $parseDayOffsets(
+        env('WHATSAPP_VIGENCIA_OFFSETS'),
+        '30,15,7,1,0'
     ),
 
     /** Enviar mensaje de alta al crear/regenerar póliza (si hay teléfono). */

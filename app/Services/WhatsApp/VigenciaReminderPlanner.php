@@ -37,8 +37,10 @@ class VigenciaReminderPlanner
             return;
         }
 
-        $fin = Carbon::parse($poliza->fin_vigencia)->startOfDay();
-        $today = Carbon::today(config('whatsapp.timezone'));
+        $tz = config('whatsapp.timezone', 'America/Mexico_City');
+        // Comparar solo la fecha (evita que un cast UTC “se coma” el día 0).
+        $fin = Carbon::createFromFormat('Y-m-d', Carbon::parse($poliza->fin_vigencia)->toDateString(), $tz)->startOfDay();
+        $today = Carbon::today($tz);
 
         if ($fin->lt($today)) {
             return;
@@ -50,6 +52,7 @@ class VigenciaReminderPlanner
             $days = (int) $days;
             $programado = $fin->copy()->subDays($days)->startOfDay();
 
+            // Incluye el día exacto (offset 0 = hoy vence).
             if ($programado->lt($today)) {
                 continue;
             }
@@ -75,9 +78,16 @@ class VigenciaReminderPlanner
             ?? $poliza->contratante?->telefono;
 
         if ($raw === null || trim($raw) === '') {
+            $poliza->loadMissing('cobranzaCuotas');
+            $raw = $poliza->cobranzaCuotas
+                ->first(fn ($c) => filled($c->telefono_notificacion))
+                ?->telefono_notificacion;
+        }
+
+        if ($raw === null || trim((string) $raw) === '') {
             return null;
         }
 
-        return trim($raw);
+        return trim((string) $raw);
     }
 }

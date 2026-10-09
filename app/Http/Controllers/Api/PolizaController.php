@@ -11,6 +11,7 @@ use App\Services\CobranzaCuotasGenerator;
 use App\Services\PolizaPremiumCalculator;
 use App\Services\WhatsApp\CobranzaReminderPlanner;
 use App\Services\WhatsApp\VigenciaReminderPlanner;
+use App\Services\WhatsApp\WhatsappNotificationSender;
 use App\Support\WorkspacePermissions;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -21,6 +22,7 @@ class PolizaController extends BaseApiController
         private CobranzaCuotasGenerator $cobranzaCuotasGenerator,
         private CobranzaReminderPlanner $whatsappReminderPlanner,
         private VigenciaReminderPlanner $vigenciaReminderPlanner,
+        private WhatsappNotificationSender $whatsappSender,
         private PolizaPremiumCalculator $premiumCalculator,
     ) {}
 
@@ -158,6 +160,8 @@ class PolizaController extends BaseApiController
             $fresh = $poliza->fresh();
             $this->whatsappReminderPlanner->syncForPoliza($fresh, isNewPoliza: true);
             $this->vigenciaReminderPlanner->syncForPoliza($fresh);
+            // Si hoy hay pago y/o vence hoy: manda ambos al momento (además del alta).
+            $this->whatsappSender->sendDueForPoliza((int) $fresh->id, includeAlta: false);
 
             return response()->json(
                 $poliza->fresh()->load([
@@ -349,7 +353,9 @@ class PolizaController extends BaseApiController
             }
 
             if ($shouldSyncVigencia || $shouldSyncCuotas) {
-                $this->vigenciaReminderPlanner->syncForPoliza($poliza->fresh()->loadMissing(['contratante', 'aseguradora', 'workspace']));
+                $fresh = $poliza->fresh()->loadMissing(['contratante', 'aseguradora', 'workspace']);
+                $this->vigenciaReminderPlanner->syncForPoliza($fresh);
+                $this->whatsappSender->sendDueForPoliza((int) $fresh->id, includeAlta: false);
             }
 
             return $poliza->fresh()->load([
