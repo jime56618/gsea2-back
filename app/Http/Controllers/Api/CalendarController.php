@@ -44,6 +44,57 @@ class CalendarController extends BaseApiController
         $this->requirePermission($request, WorkspacePermissions::CALENDAR_VIEW);
         $workspaceId = $this->resolveWorkspaceId($request);
 
+        $data = $request->validate([
+            'workspace_id' => 'sometimes|integer|min:1',
+            'agenda' => 'sometimes|in:hoy,proximos_7_dias,hoy_y_proximos_7_dias',
+            'from' => ['nullable', \Illuminate\Validation\Rule::prohibitedIf($request->filled('agenda')), 'required_with:to', 'date_format:Y-m-d'],
+            'to' => ['nullable', \Illuminate\Validation\Rule::prohibitedIf($request->filled('agenda')), 'required_with:from', 'date_format:Y-m-d', 'after_or_equal:from'],
+            'per_page' => 'sometimes|integer|min:1|max:100',
+            'page' => 'sometimes|integer|min:1',
+        ]);
+        $this->resolveWorkspaceId($request, isset($data['workspace_id']) ? (int) $data['workspace_id'] : null);
+        if (isset($data['agenda']) || isset($data['from']) || isset($data['per_page']) || isset($data['page'])) {
+            $query = CalendarEvent::query()->where('workspace_id', $workspaceId);
+            $start = isset($data['from']) ? Carbon::parse($data['from'], 'America/Merida') : null;
+            $end = isset($data['to']) ? Carbon::parse($data['to'], 'America/Merida')->addDay() : null;
+            if (isset($data['agenda'])) {
+                $start = Carbon::today('America/Merida');
+                if ($data['agenda'] === 'proximos_7_dias') {
+                    $start->addDay();
+                }
+                $end = $start->copy()->addDays(match ($data['agenda']) {
+                    'hoy' => 1,
+                    'hoy_y_proximos_7_dias' => 8,
+                    default => 7,
+                });
+            }
+            if ($start) {
+                // Mismas fechas locales almacenadas por el calendario existente.
+                // Incluye eventos que comenzaron antes y siguen en el intervalo.
+                $query->where('starts_at', '<', $end->toDateTimeString())
+                    ->where(function ($q) use ($start) {
+                        $q->where('ends_at', '>', $start->toDateTimeString())
+                            ->orWhere('starts_at', '>=', $start->toDateTimeString());
+                    });
+            }
+            $total = (clone $query)->count();
+            $list = $query->orderBy('starts_at')->orderBy('id')
+                ->paginate($data['per_page'] ?? 15)->withQueryString();
+            $list->through(fn (CalendarEvent $event) => [
+                'id' => $event->id, 'title' => $event->title,
+                'starts_at' => Carbon::parse($event->getRawOriginal('starts_at'), 'America/Merida')->toIso8601String(),
+                'ends_at' => $event->getRawOriginal('ends_at')
+                    ? Carbon::parse($event->getRawOriginal('ends_at'), 'America/Merida')->toIso8601String() : null,
+                'type' => $event->type, 'meet_link' => $event->meet_link,
+            ]);
+
+            return response()->json([
+                'workspace_id' => $workspaceId, 'timezone' => 'America/Merida',
+                'from' => $start?->toIso8601String(), 'to_exclusive' => $end?->toIso8601String(),
+                'total' => $total, 'listado' => $list,
+            ]);
+        }
+
         return CalendarEvent::where('workspace_id', $workspaceId)
             ->orderBy('starts_at')
             ->get()

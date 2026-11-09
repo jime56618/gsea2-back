@@ -10,7 +10,9 @@
         "google/apiclient": "^2.19",
         "laravel/framework": "^12.0",
         "laravel/sanctum": "^4.0",
-        "laravel/tinker": "^2.10.1"
+        "laravel/tinker": "^2.10.1",
+        "openspout/openspout": "4.28.5",
+        "stripe/stripe-php": "^22.0"
     },
     "require-dev": {
         "fakerphp/faker": "^1.23",
@@ -76,7 +78,7 @@
         }
     },
     "config": {
-        "optimize-autoloader": true,
+        "optimize-autoloader": false,
         "preferred-install": "dist",
         "sort-packages": true,
         "allow-plugins": {

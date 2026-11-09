@@ -9,12 +9,16 @@ use App\Models\PolizaVehiculo;
 use App\Models\Subramo;
 use App\Services\CobranzaCuotasGenerator;
 use App\Services\PolizaPremiumCalculator;
+use App\Services\PolizaDetallesService;
+use App\Services\Polizas\PolizaPdfAiExtractorService;
 use App\Services\WhatsApp\CobranzaReminderPlanner;
 use App\Services\WhatsApp\VigenciaReminderPlanner;
 use App\Services\WhatsApp\WhatsappNotificationSender;
 use App\Support\WorkspacePermissions;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+use App\Rules\PolizaAnteriorValida;
 
 class PolizaController extends BaseApiController
 {
@@ -24,6 +28,7 @@ class PolizaController extends BaseApiController
         private VigenciaReminderPlanner $vigenciaReminderPlanner,
         private WhatsappNotificationSender $whatsappSender,
         private PolizaPremiumCalculator $premiumCalculator,
+        private PolizaDetallesService $detallesService,
     ) {}
 
     public function index(Request $request)
@@ -40,16 +45,34 @@ class PolizaController extends BaseApiController
                 'subramo',
                 'agenteWorkspace',
                 'vehiculo',
+                'asegurados',
+                'coberturas',
+                'beneficiarios',
+                'gastosMedicos',
+                'viaje',
             ])
             ->withCount('cobranzaCuotas')
             ->where('workspace_id', $workspaceId)
             ->orderByDesc('inicio_vigencia');
 
+        
         if ($request->filled('contratante_id')) {
-            $query->where('contratante_id', $request->integer('contratante_id'));
+            $query->where(
+                'contratante_id',
+                $request->integer('contratante_id')
+            );
         }
+        
+        // Filtro opcional de pólizas con vigencia terminada.
+        if ($request->boolean('vencidas')) {
+            $query->whereDate('fin_vigencia', '<', now()->toDateString());
+        }
+        
+        $list = $query->paginate($request->integer('per_page', 15));
+        return response()->json(array_merge($list->toArray(), [
+            'renovacion_disponible' => Schema::hasColumn('polizas', 'poliza_anterior_id'),
+        ]));
 
-        return $query->paginate($request->integer('per_page', 15));
     }
 
     public function store(Request $request)
@@ -63,6 +86,7 @@ class PolizaController extends BaseApiController
             'ramo_id' => 'required|exists:ramos,id',
             'subramo_id' => 'required|exists:subramos,id',
             'numero_poliza' => 'required|string|max:255',
+            'poliza_anterior_id' => ['nullable', 'integer', 'min:1', new PolizaAnteriorValida((int) $request->user()->current_workspace_id)],
             'fecha_emision' => 'nullable|date',
             'inicio_vigencia' => 'required|date',
             'fin_vigencia' => 'required|date|after_or_equal:inicio_vigencia',
@@ -81,7 +105,7 @@ class PolizaController extends BaseApiController
             'vehiculo.placas' => 'nullable|string|max:50',
             'vehiculo.motor' => 'nullable|string|max:255',
             'vehiculo.pasajeros' => 'nullable|integer|min:0',
-        ]);
+        ] + PolizaDetallesService::rules());
         $reqWs = $data['workspace_id'] ?? null;
         if ($reqWs === 0 || $reqWs === '0') {
             $reqWs = null;
@@ -133,6 +157,7 @@ class PolizaController extends BaseApiController
                 'ramo_id' => $data['ramo_id'],
                 'subramo_id' => $data['subramo_id'],
                 'numero_poliza' => $data['numero_poliza'],
+                ...(isset($data['poliza_anterior_id']) ? ['poliza_anterior_id' => $data['poliza_anterior_id']] : []),
                 'fecha_emision' => $data['fecha_emision'] ?? null,
                 'inicio_vigencia' => $data['inicio_vigencia'],
                 'fin_vigencia' => $data['fin_vigencia'],
@@ -155,6 +180,7 @@ class PolizaController extends BaseApiController
                 }
             }
 
+            $this->detallesService->sync($poliza, $data);
             $poliza->load('contratante');
             $this->cobranzaCuotasGenerator->syncForPoliza($poliza);
             $fresh = $poliza->fresh();
@@ -171,6 +197,11 @@ class PolizaController extends BaseApiController
                     'subramo',
                     'agenteWorkspace',
                     'vehiculo',
+                'asegurados',
+                'coberturas',
+                'beneficiarios',
+                'gastosMedicos',
+                'viaje',
                     'cobranzaCuotas',
                 ]),
                 201
@@ -191,6 +222,11 @@ class PolizaController extends BaseApiController
             'subramo',
             'agenteWorkspace',
             'vehiculo',
+                'asegurados',
+                'coberturas',
+                'beneficiarios',
+                'gastosMedicos',
+                'viaje',
             'documentos',
             'cobranzaCuotas' => fn ($q) => $q->orderBy('fecha_programada')->orderBy('numero_cuota'),
         ]);
@@ -210,6 +246,8 @@ class PolizaController extends BaseApiController
             'ramo_id' => 'sometimes|required|exists:ramos,id',
             'subramo_id' => 'sometimes|required|exists:subramos,id',
             'numero_poliza' => 'sometimes|required|string|max:255',
+            // La edición del vínculo se deja fuera del guardado operativo general.
+            'poliza_anterior_id' => 'prohibited',
             'fecha_emision' => 'nullable|date',
             'inicio_vigencia' => 'sometimes|required|date',
             'fin_vigencia' => 'sometimes|required|date',
@@ -228,7 +266,7 @@ class PolizaController extends BaseApiController
             'vehiculo.placas' => 'nullable|string|max:50',
             'vehiculo.motor' => 'nullable|string|max:255',
             'vehiculo.pasajeros' => 'nullable|integer|min:0',
-        ]);
+        ] + PolizaDetallesService::rules());
 
         $workspaceId = $data['workspace_id'] ?? $activeWorkspaceId;
         $contratanteId = $data['contratante_id'] ?? $poliza->contratante_id;
@@ -345,6 +383,8 @@ class PolizaController extends BaseApiController
                 }
             }
 
+            $this->detallesService->sync($poliza, $data);
+
             if ($shouldSyncCuotas) {
                 $poliza->refresh();
                 $poliza->load('contratante');
@@ -365,6 +405,11 @@ class PolizaController extends BaseApiController
                 'subramo',
                 'agenteWorkspace',
                 'vehiculo',
+                'asegurados',
+                'coberturas',
+                'beneficiarios',
+                'gastosMedicos',
+                'viaje',
                 'cobranzaCuotas' => fn ($q) => $q->orderBy('fecha_programada')->orderBy('numero_cuota'),
             ]);
         });
@@ -377,5 +422,26 @@ class PolizaController extends BaseApiController
         $poliza->delete();
 
         return response()->noContent();
+    }
+
+    public function extractFromPdf(Request $request, PolizaPdfAiExtractorService $extractor)
+    {
+        $this->requirePermission($request, WorkspacePermissions::POLIZAS_MANAGE);
+        $requestedWs = $request->filled('workspace_id') ? $request->integer('workspace_id') : null;
+        $workspaceId = $this->resolveWorkspaceId($request, $requestedWs);
+
+        $fileKey = $request->hasFile('pdf') ? 'pdf' : 'file';
+        if (! $request->hasFile($fileKey)) {
+            return response()->json([
+                'message' => 'Debes adjuntar un archivo PDF válido para analizar.',
+                'errors' => [
+                    'pdf' => ['El archivo PDF de la póliza es obligatorio.'],
+                ],
+            ], 422);
+        }
+
+        $result = $extractor->extract($request->file($fileKey), $workspaceId);
+
+        return response()->json($result, 200);
     }
 }

@@ -13,6 +13,7 @@ class Tramite extends Model
         'tipo',
         'tipo_tramite',
         'etapa',
+        'estado',
         'nombre_agente',
         'ramo',
         'subramo',

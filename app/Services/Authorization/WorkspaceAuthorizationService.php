@@ -15,11 +15,23 @@ class WorkspaceAuthorizationService
 {
     public function membership(User $user, int $workspaceId): ?WorkspaceUser
     {
-        return WorkspaceUser::query()
+        $cacheKey = '__ws_membership_' . $user->id . '_' . $workspaceId;
+        $request = request();
+        if ($request && $request->attributes->has($cacheKey)) {
+            return $request->attributes->get($cacheKey);
+        }
+
+        $membership = WorkspaceUser::query()
             ->where('workspace_id', $workspaceId)
             ->where('user_id', $user->id)
             ->with(['role.permissions'])
             ->first();
+
+        if ($request) {
+            $request->attributes->set($cacheKey, $membership);
+        }
+
+        return $membership;
     }
 
     public function hasPermission(User $user, int $workspaceId, string $permission): bool

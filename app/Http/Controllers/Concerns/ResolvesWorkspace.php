@@ -23,9 +23,14 @@ trait ResolvesWorkspace
             ], 422));
         }
 
-        $hasAccess = $user->workspaces()
-            ->where('workspaces.id', $activeWorkspaceId)
-            ->exists();
+        $cacheKey = '__ws_access_' . $user->id . '_' . $activeWorkspaceId;
+        $hasAccess = $request->attributes->get($cacheKey);
+        if ($hasAccess === null) {
+            $hasAccess = $user->workspaces()
+                ->where('workspaces.id', $activeWorkspaceId)
+                ->exists();
+            $request->attributes->set($cacheKey, $hasAccess);
+        }
 
         if (! $hasAccess) {
             abort(response()->json([

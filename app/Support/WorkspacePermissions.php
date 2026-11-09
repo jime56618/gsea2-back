@@ -43,6 +43,8 @@ final class WorkspacePermissions
     public const TRAMITES_MANAGE = 'tramites.manage';
 
     public const DASHBOARD_VIEW = 'dashboard.view';
+    public const METAS_CREATE = 'metas_comerciales.create';
+    public const METAS_UPDATE = 'metas_comerciales.update';
 
     public const CALENDAR_VIEW = 'calendar.view';
 
@@ -68,6 +70,8 @@ final class WorkspacePermissions
             self::TRAMITES_VIEW => ['group' => 'tramites', 'description' => 'Ver trámites'],
             self::TRAMITES_MANAGE => ['group' => 'tramites', 'description' => 'Gestionar trámites'],
             self::DASHBOARD_VIEW => ['group' => 'dashboard', 'description' => 'Ver dashboard'],
+            self::METAS_CREATE => ['group' => 'dashboard', 'description' => 'Crear metas comerciales (administradores)'],
+            self::METAS_UPDATE => ['group' => 'dashboard', 'description' => 'Editar metas comerciales (administradores)'],
             self::CALENDAR_VIEW => ['group' => 'calendar', 'description' => 'Ver calendario de cobranza'],
         ];
     }
